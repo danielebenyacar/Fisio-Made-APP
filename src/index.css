@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+@config '../tailwind.config.ts';
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-brand-50 text-base text-brand-900 antialiased;
+  }
+}
