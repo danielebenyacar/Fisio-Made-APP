@@ -79,6 +79,8 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - abbonamento in scadenza (entro 7 giorni), abbonamento scaduto senza rinnovo, abbonamento con settimane perse
 - valutazione posturale seguita da un pacchetto di sedute; cliente senza alcun pacchetto
 - listino con almeno un tipo per disciplina e un tipo non in vendita
+- corsi settimanali di yoga e posturale (uno sospeso), con le lezioni degli abbonamenti agganciate al corso del giorno
+- appuntamenti fisio: passati collegati alle lezioni, futuri, uno passato "da segnare", uno annullato, una valutazione per un cliente senza pacchetto
 - cliente senza lezioni da più di 14 giorni (assente)
 - compleanno oggi, tra 2 giorni, tra 3 giorni (alert) e tra 5 giorni (NON in alert)
 - cliente con pacchetto nuovo acquistato mentre il vecchio ha ancora residue
@@ -148,6 +150,32 @@ type Lezione = {
   disciplina: Disciplina     // uguale a quella del pacchetto
   data: string               // ISO datetime
   stato: 'fatta' | 'assente' // default 'fatta'
+  corsoId?: string           // presenza a un corso di gruppo
+  appuntamentoId?: string    // seduta individuale
+  note?: string
+  createdAt: string
+}
+
+type Corso = {               // gruppo che si ripete ogni settimana (yoga, posturale)
+  id: string
+  nome: string               // es. "Yoga sera"
+  disciplina: Disciplina
+  giorno: number             // 1 = lunedì … 7 = domenica
+  ora: string                // HH:mm
+  durataMinuti: number
+  attivo: boolean            // false = sospeso, non compare in agenda
+  createdAt: string
+}
+
+type Appuntamento = {        // seduta individuale (fisio)
+  id: string
+  clienteId: string
+  disciplina: Disciplina
+  inizio: string             // ISO datetime
+  durataMinuti: number       // default 60
+  valutazione: boolean       // prima seduta = valutazione posturale
+  stato: 'programmato' | 'fatto' | 'assente' | 'annullato'
+  lezioneId?: string         // lezione registrata quando è fatto/assente
   note?: string
   createdAt: string
 }
@@ -162,6 +190,9 @@ Regole derivate (funzioni pure in `src/lib/`, con unit test):
 - Il calcolo delle residue sta in un'unica funzione (`residue()` in `src/lib/packages.ts`).
 - Vendere un pacchetto di una disciplina che il cliente non ha aggiunge quella disciplina al cliente.
 - Un pacchetto con lezioni registrate non si può eliminare.
+- Le occorrenze dei corsi non si salvano: si calcolano dal corso (giorno + ora). I presenti di un'occorrenza sono le lezioni con quel `corsoId` in quel giorno.
+- Presenze a un corso: solo dal giorno del corso in poi (non in anticipo). Se la settimana dell'abbonamento è già usata si chiede conferma ("Segna comunque"); se non c'è un abbonamento valido si propone "Nuovo pacchetto".
+- Appuntamento "fatto" → crea la lezione (FIFO) e la collega; "assente" → lezione con stato `'assente'` (se c'è un pacchetto); "Rimetti da segnare" cancella la lezione. Un appuntamento passato ancora `programmato` è "da segnare".
 
 Fuori scope per ora: incassi, fatture, report economici. Non costruirli e non aggiungere tabelle per questi.
 
@@ -189,15 +220,18 @@ Link: `https://wa.me/<numero senza +>?text=<testo url-encoded>`. Funzioni in `sr
 - Template riepilogo lezione:
   `Ciao {nome}! Lezione di oggi registrata ✅ Hai fatto {fatte} lezioni su {totali}, te ne restano {residue}.`
   Se residue ≤ 2 aggiungi: `Il pacchetto sta per finire, ne parliamo alla prossima lezione 😊`
+- Template riepilogo abbonamento: `Ciao {nome}! Lezione di oggi registrata ✅ Il tuo abbonamento {pacchetto} è valido fino al {scadenza}.` (+ avviso se scade entro 7 giorni)
 - Template auguri: `Tanti auguri {nome}! 🎉 Un abbraccio da Fisio Made.`
-- I template stanno in un unico file di costanti, così sono facili da modificare.
+- Template promemoria appuntamento: `Ciao {nome}! Ti ricordo l’appuntamento da Fisio Made {quando} alle {ora}. A presto!`
+- I template stanno in un unico file di costanti (`src/lib/messaggi.ts`), così sono facili da modificare.
 
 ## 8. UX e design
 
 - Mobile-first, layout pensato per 375px di larghezza. Testo base minimo 16px, target touch minimo 48px.
-- Navigazione in basso fissa: **Oggi · Clienti · [+] · Altro**. Il "+" centrale è "Segna lezione".
-- Azioni frequenti in massimo 2 tap. "Segna lezione": scegli cliente (con ricerca) → conferma.
-- Dopo "Segna lezione": toast con **"Annulla"** per 5 secondi, poi proposta di inviare il WhatsApp di riepilogo.
+- Navigazione in basso fissa: **Oggi · Agenda · [+] · Clienti · Altro**. Il "+" centrale è "Segna lezione".
+- Azioni frequenti in massimo 2 tap. "Segna lezione": scegli cliente (con ricerca) → tocca "Segna lezione di {disciplina}" (per yoga/posturale si aggancia al corso di oggi più vicino all'ora attuale, modificabile).
+- Dopo ogni lezione registrata (dal "+", da un corso o da un appuntamento): toast con **"Annulla"** per 5 secondi, poi proposta di inviare il WhatsApp di riepilogo (disabilitato senza telefono).
+- Agenda: settimana con giorni toccabili, per il giorno scelto corsi e appuntamenti in ordine di orario; "+ Appuntamento"; corsi gestiti da Altro → Corsi. Nuovo appuntamento: avviso (non bloccante) se si sovrappone a un altro.
 - Azioni distruttive (elimina, archivia) sempre con conferma.
 - Lista clienti: ricerca per nome/cognome, tab colorate per disciplina (Tutti · Fisio · Posturale · Yoga; un cliente con più discipline compare in ogni tab), un badge per disciplina con lo stato del pacchetto in uso (`Fisio 8/10` = fatte/totali, `Yoga al 31 ott` = scadenza), giallo se da rinnovare/in scadenza, rosso se esaurito/scaduto, più "Da pagare".
 - Scheda cliente: sezione Pacchetti con i pacchetti in uso (avanzamento, pallini delle settimane per gli abbonamenti, "Segna pagato"), storico richiudibile, "Nuovo" che parte dal listino.
@@ -216,7 +250,7 @@ src/
     clienti/
     pacchetti/    # listino, pacchetti del cliente
     lezioni/
-    agenda/       # corsi e appuntamenti (M3)
+    agenda/       # agenda, corsi, appuntamenti
     altro/        # import, listino, dati demo
   components/     # UI riutilizzabile (Button, Card, Badge, Toast, Sheet)
   data/

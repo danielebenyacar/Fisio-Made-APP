@@ -36,7 +36,7 @@ export function ClientePacchetti({ clienteId, today }: { clienteId: string; toda
     <section className="mt-6">
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold">Pacchetti</h2>
-        <ButtonLink to={`/clienti/${clienteId}/pacchetti/nuovo`} className="shrink-0">
+        <ButtonLink to={`/clienti/${clienteId}/pacchetti/nuovo`} className="shrink-0" aria-label="Nuovo pacchetto">
           <PlusIcon width={20} height={20} strokeWidth={2.5} />
           Nuovo
         </ButtonLink>

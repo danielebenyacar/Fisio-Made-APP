@@ -1,8 +1,14 @@
 import type {
+  Appuntamento,
+  AppuntamentoPatch,
   Cliente,
   ClientePatch,
+  Corso,
+  CorsoPatch,
   Lezione,
+  NewAppuntamento,
   NewCliente,
+  NewCorso,
   NewLezione,
   NewPacchetto,
   NewTipoPacchetto,
@@ -13,6 +19,9 @@ import type {
 } from './types'
 
 export type ByCliente = { clienteId?: string }
+
+/** Appointments of one client and/or starting in [da, a) (ISO datetimes). */
+export type AppuntamentiFilter = { clienteId?: string; da?: string; a?: string }
 
 /**
  * The only data access point for the UI. Implementations: mock (localStorage)
@@ -43,4 +52,15 @@ export interface Repository {
   listLezioni(filter?: ByCliente): Promise<Lezione[]>
   createLezione(input: NewLezione): Promise<Lezione>
   deleteLezione(id: string): Promise<void>
+
+  /** Weekly group classes, sorted by day then time. Inactive ones included. */
+  listCorsi(): Promise<Corso[]>
+  createCorso(input: NewCorso): Promise<Corso>
+  updateCorso(id: string, patch: CorsoPatch): Promise<Corso>
+
+  /** Individual appointments, sorted by start time. */
+  listAppuntamenti(filter?: AppuntamentiFilter): Promise<Appuntamento[]>
+  getAppuntamento(id: string): Promise<Appuntamento | null>
+  createAppuntamento(input: NewAppuntamento): Promise<Appuntamento>
+  updateAppuntamento(id: string, patch: AppuntamentoPatch): Promise<Appuntamento>
 }

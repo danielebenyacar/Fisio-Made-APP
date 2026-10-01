@@ -54,7 +54,7 @@ describe('MockRepository', () => {
     storage.setItem(STORAGE_KEY, JSON.stringify({ version: 999, clienti: [] }))
     expect((await make().listClienti()).length).toBeGreaterThan(10)
     // Older versions (Modules 0–1) had another shape: they must be replaced too.
-    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, clienti: [], pacchetti: [], lezioni: [] }))
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 3, clienti: [], tipiPacchetto: [], pacchetti: [], lezioni: [] }))
     expect((await make().listTipiPacchetto()).length).toBeGreaterThan(0)
     expect((await make().listClienti()).length).toBeGreaterThan(10)
   })
@@ -164,6 +164,35 @@ describe('MockRepository', () => {
     expect(await repo.getTipoPacchetto(created.id)).toEqual(updated)
     expect(updated).toMatchObject({ attivo: false, prezzo: 115, nome: 'Yoga bimestrale' })
     await expect(repo.updateTipoPacchetto('missing', {})).rejects.toThrow('non trovato')
+  })
+
+  it('manages weekly classes sorted by day and time', async () => {
+    const repo = make()
+    const corsi = await repo.listCorsi()
+    const keys = corsi.map((c) => `${c.giorno} ${c.ora}`)
+    expect(keys).toEqual([...keys].sort())
+    const created = await repo.createCorso({ nome: 'Yoga domenica', disciplina: 'yoga', giorno: 7, ora: '10:00', durataMinuti: 75, attivo: true })
+    expect((await repo.listCorsi()).at(-1)).toEqual(created)
+    expect(await repo.updateCorso(created.id, { attivo: false })).toMatchObject({ attivo: false, durataMinuti: 75 })
+    await expect(repo.updateCorso('missing', {})).rejects.toThrow('Corso non trovato')
+  })
+
+  it('manages appointments, filtered by client and time range', async () => {
+    const repo = make()
+    const cliente = await newCliente(repo)
+    await expect(
+      repo.createAppuntamento({ clienteId: 'missing', disciplina: 'fisio', inizio: NOW.toISOString(), durataMinuti: 60, valutazione: false }),
+    ).rejects.toThrow('Cliente non trovato')
+    const later = await repo.createAppuntamento({ clienteId: cliente.id, disciplina: 'fisio', inizio: '2026-10-05T08:00:00.000Z', durataMinuti: 60, valutazione: false })
+    const first = await repo.createAppuntamento({ clienteId: cliente.id, disciplina: 'fisio', inizio: '2026-10-02T08:00:00.000Z', durataMinuti: 60, valutazione: true })
+    expect(first.stato).toBe('programmato')
+    expect((await repo.listAppuntamenti({ clienteId: cliente.id })).map((a) => a.id)).toEqual([first.id, later.id])
+    expect(
+      (await repo.listAppuntamenti({ clienteId: cliente.id, da: '2026-10-03T00:00:00.000Z', a: '2026-10-10T00:00:00.000Z' })).map((a) => a.id),
+    ).toEqual([later.id])
+    const done = await repo.updateAppuntamento(first.id, { stato: 'fatto', lezioneId: 'l1' })
+    expect(await repo.getAppuntamento(first.id)).toEqual(done)
+    await expect(repo.updateAppuntamento('missing', {})).rejects.toThrow('non trovato')
   })
 
   it('reset() discards changes and restores the demo data', async () => {

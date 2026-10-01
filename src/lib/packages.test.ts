@@ -3,6 +3,7 @@ import type { Lezione, Pacchetto } from '../data/types'
 import {
   haSuccessivo,
   ordinaPacchetti,
+  pacchettoPerLezione,
   pacchettiInEvidenza,
   residue,
   scadenzaDopoMesi,
@@ -200,5 +201,42 @@ describe('ordinaPacchetti', () => {
     const b = sedute({ id: 'b', dataInizio: '2026-09-01', createdAt: '2026-09-01T09:00:00.000Z' })
     const c = sedute({ id: 'c', dataInizio: '2026-09-01', createdAt: '2026-09-01T08:00:00.000Z' })
     expect(ordinaPacchetti([a, b, c]).map((p) => p.id)).toEqual(['c', 'b', 'a'])
+  })
+})
+
+describe('pacchettoPerLezione (FIFO)', () => {
+  const fisioOld = sedute({ id: 'old', lezioniTotali: 2, dataInizio: '2026-08-01', dataAcquisto: '2026-08-01' })
+  const fisioNew = sedute({ id: 'new', lezioniTotali: 10, dataInizio: '2026-09-20', dataAcquisto: '2026-09-20' })
+
+  it('uses the oldest package of the discipline with sessions left', () => {
+    expect(pacchettoPerLezione([fisioNew, fisioOld], [], 'fisio', TODAY)).toEqual({ tipo: 'ok', pacchetto: fisioOld })
+    const used = times(2, 'old')
+    expect(pacchettoPerLezione([fisioNew, fisioOld], used, 'fisio', TODAY)).toEqual({ tipo: 'ok', pacchetto: fisioNew })
+  })
+
+  it('does not count absences as used sessions', () => {
+    const lezioni = [lezione('old', new Date(2026, 8, 3), 'assente'), lezione('old', new Date(2026, 8, 4), 'assente')]
+    expect(pacchettoPerLezione([fisioOld], lezioni, 'fisio', TODAY)).toMatchObject({ pacchetto: { id: 'old' } })
+  })
+
+  it('ignores other disciplines, expired and not yet started packages', () => {
+    const expired = sedute({ id: 'exp', scadenza: '2026-09-30' })
+    const future = sedute({ id: 'fut', dataInizio: '2026-10-05' })
+    expect(pacchettoPerLezione([expired, future, abbonamento()], [], 'fisio', TODAY)).toEqual({ tipo: 'nessuno' })
+  })
+
+  it('uses a subscription once per week', () => {
+    const yoga = abbonamento()
+    const thisWeek = [lezione('a1', new Date(2026, 8, 29, 18))] // Tuesday of the same week
+    expect(pacchettoPerLezione([yoga], [], 'yoga', TODAY)).toEqual({ tipo: 'ok', pacchetto: yoga })
+    expect(pacchettoPerLezione([yoga], thisWeek, 'yoga', TODAY)).toEqual({ tipo: 'settimana-gia-usata', pacchetto: yoga })
+    expect(pacchettoPerLezione([yoga], thisWeek, 'yoga', new Date(2026, 9, 6))).toEqual({ tipo: 'ok', pacchetto: yoga })
+  })
+
+  it('moves to the next subscription when the week of the older one is used', () => {
+    const first = abbonamento({ id: 'first', dataInizio: '2026-09-15', scadenza: '2026-10-14' })
+    const second = abbonamento({ id: 'second' })
+    const used = [lezione('first', new Date(2026, 8, 29, 18))]
+    expect(pacchettoPerLezione([second, first], used, 'yoga', TODAY)).toEqual({ tipo: 'ok', pacchetto: second })
   })
 })

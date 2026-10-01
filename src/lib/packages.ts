@@ -166,3 +166,43 @@ export function pacchettiInEvidenza(
   }
   return result
 }
+
+export type SceltaPacchetto =
+  | { tipo: 'ok'; pacchetto: Pacchetto }
+  /** Only subscriptions whose week is already used: can be recorded anyway, it uses no extra right. */
+  | { tipo: 'settimana-gia-usata'; pacchetto: Pacchetto }
+  | { tipo: 'nessuno' }
+
+/**
+ * Which package a lesson of `disciplina` on `quando` uses (FIFO): the oldest
+ * package valid that day with something left — sessions left, or a
+ * subscription whose week is still unused.
+ */
+export function pacchettoPerLezione(
+  pacchetti: Pacchetto[],
+  lezioni: Lezione[],
+  disciplina: Disciplina,
+  quando: Date,
+): SceltaPacchetto {
+  const day = toIsoDate(quando)
+  const weekStart = startOfWeek(quando, WEEK)
+  const weekEnd = addDays(weekStart, 7)
+  let weekUsed: Pacchetto | undefined
+
+  const candidates = ordinaPacchetti(
+    pacchetti.filter(
+      (p) => p.disciplina === disciplina && p.dataInizio <= day && (!p.scadenza || day <= p.scadenza),
+    ),
+  )
+  for (const p of candidates) {
+    const done = lezioniFatte(p, lezioni)
+    if (p.modalita === 'sedute') {
+      if (done.length < (p.lezioniTotali ?? 0)) return { tipo: 'ok', pacchetto: p }
+    } else if (done.some((l) => new Date(l.data) >= weekStart && new Date(l.data) < weekEnd)) {
+      weekUsed ??= p
+    } else {
+      return { tipo: 'ok', pacchetto: p }
+    }
+  }
+  return weekUsed ? { tipo: 'settimana-gia-usata', pacchetto: weekUsed } : { tipo: 'nessuno' }
+}

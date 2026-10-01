@@ -70,6 +70,15 @@ export function AltroPage() {
       <PageTitle>Altro</PageTitle>
       <div className="mt-6 flex flex-col gap-4">
         <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Corsi settimanali</h2>
+          <p className="mt-2 text-brand-700">I gruppi di yoga e posturale con giorno e orario fissi.</p>
+          <div className="mt-5">
+            <ButtonLink to="/altro/corsi" variant="secondary">
+              Apri i corsi
+            </ButtonLink>
+          </div>
+        </section>
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold">Listino</h2>
           <p className="mt-2 text-brand-700">
             Pacchetti di sedute e abbonamenti che vendi, con durata e prezzo.

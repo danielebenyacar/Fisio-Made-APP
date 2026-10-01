@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPhone, normalizePhone } from './whatsapp'
+import { formatPhone, linkWhatsApp, normalizePhone } from './whatsapp'
 
 describe('normalizePhone', () => {
   it.each([
@@ -29,5 +29,13 @@ describe('formatPhone', () => {
   it('leaves other numbers readable', () => {
     expect(formatPhone('+390612345678')).toBe('+39 0612345678')
     expect(formatPhone('+41791234567')).toBe('+41791234567')
+  })
+})
+
+describe('linkWhatsApp', () => {
+  it('builds a wa.me link with the number without + and the text encoded', () => {
+    expect(linkWhatsApp('+393331234567', 'Ciao Maria! ✅ 2 su 10')).toBe(
+      'https://wa.me/393331234567?text=Ciao%20Maria!%20%E2%9C%85%202%20su%2010',
+    )
   })
 })

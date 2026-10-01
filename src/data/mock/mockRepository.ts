@@ -1,9 +1,15 @@
-import type { ByCliente, Repository } from '../repository'
+import type { AppuntamentiFilter, ByCliente, Repository } from '../repository'
 import type {
+  Appuntamento,
+  AppuntamentoPatch,
   Cliente,
   ClientePatch,
+  Corso,
+  CorsoPatch,
   Lezione,
+  NewAppuntamento,
   NewCliente,
+  NewCorso,
   NewLezione,
   NewPacchetto,
   NewTipoPacchetto,
@@ -17,7 +23,7 @@ import { ordinaPacchetti } from '../../lib/packages'
 import { createSeed, type DemoData } from './seed'
 
 export const STORAGE_KEY = 'fisiomade-demo'
-const STORAGE_VERSION = 3 // bump when the data shape changes: old demo data is reseeded
+const STORAGE_VERSION = 4 // bump when the data shape changes: old demo data is reseeded
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -188,6 +194,67 @@ export class MockRepository implements Repository {
     this.save()
   }
 
+  async listCorsi(): Promise<Corso[]> {
+    const sorted = [...this.data.corsi].sort(
+      (a, b) => a.giorno - b.giorno || a.ora.localeCompare(b.ora) || a.nome.localeCompare(b.nome, 'it'),
+    )
+    return copy(sorted)
+  }
+
+  async createCorso(input: NewCorso): Promise<Corso> {
+    const corso: Corso = { ...input, id: this.options.newId(), createdAt: this.options.now().toISOString() }
+    this.data.corsi.push(corso)
+    this.save()
+    return copy(corso)
+  }
+
+  async updateCorso(id: string, patch: CorsoPatch): Promise<Corso> {
+    const corso = this.data.corsi.find((c) => c.id === id)
+    if (!corso) throw new Error('Corso non trovato')
+    Object.assign(corso, patch)
+    this.save()
+    return copy(corso)
+  }
+
+  async listAppuntamenti(filter: AppuntamentiFilter = {}): Promise<Appuntamento[]> {
+    const { clienteId, da, a } = filter
+    const sorted = this.data.appuntamenti
+      .filter(
+        (x) =>
+          (!clienteId || x.clienteId === clienteId) &&
+          (!da || new Date(x.inizio) >= new Date(da)) &&
+          (!a || new Date(x.inizio) < new Date(a)),
+      )
+      .sort((x, y) => new Date(x.inizio).getTime() - new Date(y.inizio).getTime())
+    return copy(sorted)
+  }
+
+  async getAppuntamento(id: string): Promise<Appuntamento | null> {
+    const appuntamento = this.data.appuntamenti.find((x) => x.id === id)
+    return appuntamento ? copy(appuntamento) : null
+  }
+
+  async createAppuntamento(input: NewAppuntamento): Promise<Appuntamento> {
+    this.findCliente(input.clienteId)
+    const appuntamento: Appuntamento = {
+      ...input,
+      stato: input.stato ?? 'programmato',
+      id: this.options.newId(),
+      createdAt: this.options.now().toISOString(),
+    }
+    this.data.appuntamenti.push(appuntamento)
+    this.save()
+    return copy(appuntamento)
+  }
+
+  async updateAppuntamento(id: string, patch: AppuntamentoPatch): Promise<Appuntamento> {
+    const appuntamento = this.data.appuntamenti.find((x) => x.id === id)
+    if (!appuntamento) throw new Error('Appuntamento non trovato')
+    Object.assign(appuntamento, patch)
+    this.save()
+    return copy(appuntamento)
+  }
+
   private findCliente(id: string): Cliente {
     const cliente = this.data.clienti.find((c) => c.id === id)
     if (!cliente) throw new Error('Cliente non trovato')
@@ -210,7 +277,9 @@ export class MockRepository implements Repository {
         !Array.isArray(stored.clienti) ||
         !Array.isArray(stored.tipiPacchetto) ||
         !Array.isArray(stored.pacchetti) ||
-        !Array.isArray(stored.lezioni)
+        !Array.isArray(stored.lezioni) ||
+        !Array.isArray(stored.corsi) ||
+        !Array.isArray(stored.appuntamenti)
       ) {
         return null
       }
@@ -219,6 +288,8 @@ export class MockRepository implements Repository {
         tipiPacchetto: stored.tipiPacchetto,
         pacchetti: stored.pacchetti,
         lezioni: stored.lezioni,
+        corsi: stored.corsi,
+        appuntamenti: stored.appuntamenti,
       }
     } catch {
       return null

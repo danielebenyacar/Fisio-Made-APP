@@ -1,4 +1,4 @@
-import { addDays, format, isValid, parseISO } from 'date-fns'
+import { addDays, format, getISODay, isValid, parseISO } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import { toIsoDate } from '../../lib/dates'
 import { pacchettiInEvidenza, settimaneAbbonamento, statoPacchetto } from '../../lib/packages'
@@ -109,6 +109,35 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     expect(lezioniOf(data, valentina).filter((l) => l.stato === 'assente')).toHaveLength(1)
     const [p] = pacchettiOf(data, valentina)
     expect(statoPacchetto(p, data.lezioni, now).residue).toBe(7)
+  })
+
+  it('has weekly classes and attaches subscription lessons to them', () => {
+    expect(data.corsi.filter((c) => c.attivo && c.disciplina === 'yoga').length).toBeGreaterThan(2)
+    expect(data.corsi.filter((c) => c.attivo && c.disciplina === 'posturale').length).toBeGreaterThan(2)
+    expect(data.corsi.some((c) => !c.attivo)).toBe(true)
+    const withCorso = data.lezioni.filter((l) => l.corsoId)
+    expect(withCorso.length).toBeGreaterThan(10)
+    for (const l of withCorso) {
+      const corso = data.corsi.find((c) => c.id === l.corsoId)!
+      const when = parseISO(l.data)
+      expect(corso.disciplina).toBe(l.disciplina)
+      expect(getISODay(when)).toBe(corso.giorno)
+      expect(format(when, 'HH:mm')).toBe(corso.ora)
+    }
+  })
+
+  it('links every fisio lesson to an appointment, and has upcoming ones', () => {
+    for (const l of data.lezioni.filter((x) => x.disciplina === 'fisio')) {
+      const app = data.appuntamenti.find((a) => a.id === l.appuntamentoId)!
+      expect(app).toMatchObject({ lezioneId: l.id, clienteId: l.clienteId, inizio: l.data })
+      expect(app.stato).toBe(l.stato === 'fatta' ? 'fatto' : 'assente')
+    }
+    const future = data.appuntamenti.filter((a) => a.stato === 'programmato' && parseISO(a.inizio) > now)
+    expect(future.length).toBeGreaterThanOrEqual(4)
+    expect(data.appuntamenti.some((a) => a.stato === 'annullato')).toBe(true)
+    const paolo = byName(data, 'Paolo')
+    expect(data.appuntamenti.find((a) => a.clienteId === paolo.id)).toMatchObject({ valutazione: true, stato: 'programmato' })
+    expect(data.appuntamenti.some((a) => a.valutazione && a.stato === 'fatto')).toBe(true)
   })
 
   it('has birthdays today, in 2, 3 and 5 days', () => {

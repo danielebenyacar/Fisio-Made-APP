@@ -55,6 +55,34 @@ export type Pacchetto = {
   createdAt: string
 }
 
+/** A weekly group class (yoga, posturale) at a fixed day and time. */
+export type Corso = {
+  id: string
+  nome: string // e.g. "Yoga sera"
+  disciplina: Disciplina
+  giorno: number // 1 = Monday … 7 = Sunday
+  ora: string // HH:mm
+  durataMinuti: number
+  attivo: boolean
+  createdAt: string
+}
+
+export type StatoAppuntamento = 'programmato' | 'fatto' | 'assente' | 'annullato'
+
+/** An individual session (fisio): one client, one time slot. */
+export type Appuntamento = {
+  id: string
+  clienteId: string
+  disciplina: Disciplina
+  inizio: string // ISO datetime
+  durataMinuti: number
+  valutazione: boolean // the first fisio session: posture assessment
+  stato: StatoAppuntamento
+  lezioneId?: string // the lesson recorded when marked 'fatto' or 'assente'
+  note?: string
+  createdAt: string
+}
+
 export type LezioneStato = 'fatta' | 'assente'
 
 export type Lezione = {
@@ -64,6 +92,8 @@ export type Lezione = {
   disciplina: Disciplina
   data: string // ISO datetime
   stato: LezioneStato
+  corsoId?: string // attended a group class
+  appuntamentoId?: string // from an individual appointment
   note?: string
   createdAt: string
 }
@@ -78,6 +108,14 @@ export type TipoPacchettoPatch = Partial<NewTipoPacchetto>
 
 export type NewPacchetto = Omit<Pacchetto, 'id' | 'createdAt'>
 export type PacchettoPatch = Partial<Omit<Pacchetto, 'id' | 'createdAt' | 'clienteId'>>
+
+export type NewCorso = Omit<Corso, 'id' | 'createdAt'>
+export type CorsoPatch = Partial<NewCorso>
+
+export type NewAppuntamento = Omit<Appuntamento, 'id' | 'createdAt' | 'stato'> & {
+  stato?: StatoAppuntamento // defaults to 'programmato'
+}
+export type AppuntamentoPatch = Partial<Omit<Appuntamento, 'id' | 'createdAt' | 'clienteId'>>
 
 export type NewLezione = Omit<Lezione, 'id' | 'createdAt' | 'stato'> & {
   stato?: LezioneStato // defaults to 'fatta'

@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
-import { CalendarIcon, MoreIcon, PlusIcon, UsersIcon } from '../components/icons'
+import { AgendaIcon, HomeIcon, MoreIcon, PlusIcon, UsersIcon } from '../components/icons'
 
 type Item = { to: string; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 
@@ -27,9 +27,9 @@ export function BottomNav() {
       aria-label="Navigazione principale"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-200 bg-white pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="mx-auto grid max-w-md grid-cols-4 items-center">
-        <NavItem to="/" label="Oggi" Icon={CalendarIcon} />
-        <NavItem to="/clienti" label="Clienti" Icon={UsersIcon} />
+      <div className="mx-auto grid max-w-md grid-cols-5 items-center">
+        <NavItem to="/" label="Oggi" Icon={HomeIcon} />
+        <NavItem to="/agenda" label="Agenda" Icon={AgendaIcon} />
         <NavLink
           to="/segna-lezione"
           aria-label="Segna lezione"
@@ -45,6 +45,7 @@ export function BottomNav() {
             </span>
           )}
         </NavLink>
+        <NavItem to="/clienti" label="Clienti" Icon={UsersIcon} />
         <NavItem to="/altro" label="Altro" Icon={MoreIcon} />
       </div>
     </nav>

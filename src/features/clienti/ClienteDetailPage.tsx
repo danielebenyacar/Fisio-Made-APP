@@ -14,6 +14,7 @@ import type { Cliente, Disciplina } from '../../data'
 import { fullName } from '../../lib/clienti'
 import { ageOn, formatDateIt } from '../../lib/dates'
 import { formatPhone } from '../../lib/whatsapp'
+import { ClienteAgenda } from '../agenda/ClienteAgenda'
 import { ClientePacchetti } from '../pacchetti/ClientePacchetti'
 import { useCliente } from './useClienti'
 
@@ -115,6 +116,7 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
       </section>
 
       {!cliente.archiviato && <ClientePacchetti clienteId={cliente.id} today={today} />}
+      {!cliente.archiviato && <ClienteAgenda clienteId={cliente.id} now={today} />}
 
       <h2 className="mt-6 mb-2 text-xl font-bold">Dati</h2>
       <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">

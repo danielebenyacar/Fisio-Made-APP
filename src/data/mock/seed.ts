@@ -1,14 +1,64 @@
-import { addDays, setHours, startOfDay, subDays } from 'date-fns'
+import { addDays, getISODay, setHours, startOfDay, subDays } from 'date-fns'
+import { dataOra } from '../../lib/agenda'
 import { toIsoDate } from '../../lib/dates'
 import { scadenzaDopoMesi } from '../../lib/packages'
-import type { Cliente, Disciplina, Lezione, Pacchetto, TipoPacchetto } from '../types'
+import type {
+  Appuntamento,
+  Cliente,
+  Corso,
+  Disciplina,
+  Lezione,
+  Pacchetto,
+  StatoAppuntamento,
+  TipoPacchetto,
+} from '../types'
 
 export type DemoData = {
   clienti: Cliente[]
   tipiPacchetto: TipoPacchetto[]
   pacchetti: Pacchetto[]
   lezioni: Lezione[]
+  corsi: Corso[]
+  appuntamenti: Appuntamento[]
 }
+
+type CorsoSeed = Omit<Corso, 'id' | 'createdAt' | 'durataMinuti' | 'attivo'> & { attivo?: false }
+
+// Weekly group classes: one yoga and one posturale every weekday, plus a suspended one.
+const CORSI: CorsoSeed[] = [
+  { nome: 'Posturale mattina', disciplina: 'posturale', giorno: 1, ora: '10:00' },
+  { nome: 'Yoga sera', disciplina: 'yoga', giorno: 1, ora: '18:30' },
+  { nome: 'Yoga mattina', disciplina: 'yoga', giorno: 2, ora: '09:30' },
+  { nome: 'Posturale sera', disciplina: 'posturale', giorno: 2, ora: '18:00' },
+  { nome: 'Posturale mattina', disciplina: 'posturale', giorno: 3, ora: '10:00' },
+  { nome: 'Yoga sera', disciplina: 'yoga', giorno: 3, ora: '18:30' },
+  { nome: 'Yoga mattina', disciplina: 'yoga', giorno: 4, ora: '09:30' },
+  { nome: 'Posturale sera', disciplina: 'posturale', giorno: 4, ora: '18:00' },
+  { nome: 'Posturale mattina', disciplina: 'posturale', giorno: 5, ora: '10:00' },
+  { nome: 'Yoga sera', disciplina: 'yoga', giorno: 5, ora: '18:30' },
+  { nome: 'Yoga del sabato', disciplina: 'yoga', giorno: 6, ora: '10:00', attivo: false },
+]
+
+type AppuntamentoSeed = {
+  cliente: string // nome
+  /** Days from today (negative = past) and time. Sundays move to Monday. */
+  giorno: number
+  ora: string
+  valutazione?: true
+  stato?: StatoAppuntamento
+}
+
+// Upcoming (and a couple of past) fisio appointments, besides those of past lessons.
+const APPUNTAMENTI: AppuntamentoSeed[] = [
+  { cliente: 'Davide', giorno: -1, ora: '16:00' }, // past, never marked: "da segnare"
+  { cliente: 'Andrea', giorno: 0, ora: '17:00' },
+  { cliente: 'Marco', giorno: 1, ora: '10:00' },
+  { cliente: 'Paolo', giorno: 1, ora: '09:00', valutazione: true }, // no package yet
+  { cliente: 'Valentina', giorno: 2, ora: '11:00' },
+  { cliente: 'Francesca', giorno: 2, ora: '09:00', stato: 'annullato' },
+  { cliente: 'Matteo', giorno: 3, ora: '15:00' },
+  { cliente: 'Giulia', giorno: 4, ora: '12:00' }, // her package is finished
+]
 
 type TipoSeed = Omit<TipoPacchetto, 'id' | 'createdAt' | 'attivo'> & { attivo?: false }
 
@@ -235,9 +285,28 @@ export function createSeed(now: Date): DemoData {
   const today = startOfDay(now)
   const daysAgo = (n: number) => subDays(today, n)
   const listinoCreated = setHours(daysAgo(200), 9).toISOString()
-  const data: DemoData = { clienti: [], tipiPacchetto: [], pacchetti: [], lezioni: [] }
+  const data: DemoData = { clienti: [], tipiPacchetto: [], pacchetti: [], lezioni: [], corsi: [], appuntamenti: [] }
   let pacchettoSeq = 0
   let lezioneSeq = 0
+  let appuntamentoSeq = 0
+
+  CORSI.forEach((corso, i) => {
+    data.corsi.push({ durataMinuti: 60, attivo: true, ...corso, id: `demo-corso-${pad(i + 1, 2)}`, createdAt: listinoCreated })
+  })
+  const corsoDi = (disciplina: Disciplina, giorno: number) =>
+    data.corsi.find((c) => c.attivo && c.disciplina === disciplina && c.giorno === giorno)
+
+  const addAppuntamento = (a: Omit<Appuntamento, 'id' | 'createdAt' | 'durataMinuti'>) => {
+    appuntamentoSeq += 1
+    const appuntamento: Appuntamento = {
+      ...a,
+      durataMinuti: 60,
+      id: `demo-appuntamento-${pad(appuntamentoSeq, 3)}`,
+      createdAt: setHours(subDays(new Date(a.inizio), 7), 12).toISOString(),
+    }
+    data.appuntamenti.push(appuntamento)
+    return appuntamento
+  }
 
   const tipoId = (key: TipoKey) => `demo-tipo-${key}`
   for (const [key, tipo] of Object.entries(LISTINO) as [TipoKey, TipoSeed][]) {
@@ -298,7 +367,12 @@ export function createSeed(now: Date): DemoData {
 
       for (const { d, stato } of lezioni) {
         lezioneSeq += 1
-        const when = setHours(daysAgo(d), 9 + (lezioneSeq % 9)).toISOString()
+        // Weekend lessons move back to Friday (same week), if the package had started.
+        let day = daysAgo(d)
+        const weekday = getISODay(day)
+        if (weekday >= 6 && toIsoDate(subDays(day, weekday - 5)) >= dataInizio) day = subDays(day, weekday - 5)
+        const corso = pacchetto.modalita === 'abbonamento' ? corsoDi(pacchetto.disciplina, getISODay(day)) : undefined
+        const when = (corso ? dataOra(toIsoDate(day), corso.ora) : setHours(day, 9 + (lezioneSeq % 9))).toISOString()
         const lezione: Lezione = {
           id: `demo-lezione-${pad(lezioneSeq, 3)}`,
           pacchettoId: pacchetto.id,
@@ -308,11 +382,36 @@ export function createSeed(now: Date): DemoData {
           stato,
           createdAt: when,
         }
+        if (corso) lezione.corsoId = corso.id
         if (stato === 'assente') lezione.note = 'Ha avvisato: influenza.'
+        if (pacchetto.disciplina === 'fisio') {
+          const appuntamento = addAppuntamento({
+            clienteId: cliente.id,
+            disciplina: 'fisio',
+            inizio: when,
+            valutazione: p.tipo === 'valutazione',
+            stato: stato === 'fatta' ? 'fatto' : 'assente',
+            lezioneId: lezione.id,
+          })
+          lezione.appuntamentoId = appuntamento.id
+        }
         data.lezioni.push(lezione)
       }
     }
   })
+
+  for (const a of APPUNTAMENTI) {
+    const cliente = data.clienti.find((c) => c.nome === a.cliente)!
+    let day = addDays(today, a.giorno)
+    if (getISODay(day) === 7) day = addDays(day, 1)
+    addAppuntamento({
+      clienteId: cliente.id,
+      disciplina: 'fisio',
+      inizio: dataOra(toIsoDate(day), a.ora).toISOString(),
+      valutazione: a.valutazione ?? false,
+      stato: a.stato ?? 'programmato',
+    })
+  }
 
   return data
 }

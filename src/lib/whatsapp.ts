@@ -25,3 +25,8 @@ export function formatPhone(e164: string): string {
   if (e164.startsWith('+39')) return `+39 ${e164.slice(3)}`
   return e164
 }
+
+/** wa.me link opening a chat with a prefilled message. */
+export function linkWhatsApp(e164: string, testo: string): string {
+  return `https://wa.me/${e164.replace(/\D/g, '')}?text=${encodeURIComponent(testo)}`
+}
