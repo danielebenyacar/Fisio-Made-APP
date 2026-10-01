@@ -126,6 +126,25 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     }
   })
 
+  it('enrolls subscribers in a fixed group, with one change of group', () => {
+    for (const corso of data.corsi) {
+      for (const id of corso.iscritti) {
+        const c = data.clienti.find((x) => x.id === id)!
+        expect(c.archiviato).toBe(false)
+        expect(data.pacchetti.some((p) => p.clienteId === id && p.disciplina === corso.disciplina)).toBe(true)
+      }
+    }
+    for (const nome of ['Chiara', 'Sara', 'Alessandro', 'Luca']) {
+      expect(data.corsi.some((c) => c.iscritti.includes(byName(data, nome).id))).toBe(true)
+    }
+    // Federica's yoga lessons are in a group she is not enrolled in.
+    const federica = byName(data, 'Federica')
+    const [gruppo] = data.corsi.filter((c) => c.disciplina === 'yoga' && c.iscritti.includes(federica.id))
+    const yoga = lezioniOf(data, federica).filter((l) => l.disciplina === 'yoga' && l.corsoId)
+    expect(yoga.length).toBeGreaterThan(0)
+    expect(yoga.every((l) => l.corsoId !== gruppo.id)).toBe(true)
+  })
+
   it('links every fisio lesson to an appointment, and has upcoming ones', () => {
     for (const l of data.lezioni.filter((x) => x.disciplina === 'fisio')) {
       const app = data.appuntamenti.find((a) => a.id === l.appuntamentoId)!

@@ -5,9 +5,12 @@ import {
   dataOra,
   daSegnare,
   giorniSettimana,
+  gruppiDelCliente,
+  lezioneAltraOccorrenza,
   occorrenzeCorsi,
   oraDi,
   presentiOccorrenza,
+  presenzaInOccorrenza,
 } from './agenda'
 import { toIsoDate } from './dates'
 
@@ -19,6 +22,7 @@ const corso = (overrides: Partial<Corso>): Corso => ({
   ora: '18:30',
   durataMinuti: 60,
   attivo: true,
+  iscritti: [],
   createdAt: '',
   ...overrides,
 })
@@ -107,5 +111,43 @@ describe('daSegnare', () => {
     expect(daSegnare(app('programmato', new Date(2026, 9, 1, 10)), THURSDAY)).toBe(true)
     expect(daSegnare(app('programmato', new Date(2026, 9, 1, 15)), THURSDAY)).toBe(false)
     expect(daSegnare(app('fatto', new Date(2026, 9, 1, 10)), THURSDAY)).toBe(false)
+  })
+})
+
+describe('fixed groups and group changes', () => {
+  const lezione = (id: string, clienteId: string, corsoId: string | undefined, data: Date, stato: Lezione['stato'] = 'fatta'): Lezione => ({
+    id,
+    pacchettoId: 'p',
+    clienteId,
+    disciplina: 'yoga',
+    data: data.toISOString(),
+    stato,
+    corsoId,
+    createdAt: '',
+  })
+  const lezioni = [
+    lezione('a', 'maria', 'yoga-mar', new Date(2026, 8, 29, 9, 30)), // Tuesday of the week
+    lezione('b', 'luca', 'yoga-gio', new Date(2026, 9, 1, 9, 30), 'assente'),
+    lezione('c', 'maria', 'yoga-mar', new Date(2026, 8, 22, 9, 30)), // previous week
+  ]
+
+  it('finds the presence or absence of a client in a session', () => {
+    expect(presenzaInOccorrenza(lezioni, 'maria', 'yoga-mar', '2026-09-29')?.id).toBe('a')
+    expect(presenzaInOccorrenza(lezioni, 'luca', 'yoga-gio', '2026-10-01')?.stato).toBe('assente')
+    expect(presenzaInOccorrenza(lezioni, 'maria', 'yoga-gio', '2026-10-01')).toBeUndefined()
+  })
+
+  it('finds a lesson done elsewhere the same week', () => {
+    const thursday = new Date(2026, 9, 1, 9, 30)
+    expect(lezioneAltraOccorrenza(lezioni, 'maria', 'yoga', thursday, 'yoga-gio')?.id).toBe('a')
+    // Not the session itself, not absences, not other weeks.
+    expect(lezioneAltraOccorrenza(lezioni, 'maria', 'yoga', new Date(2026, 8, 29, 9, 30), 'yoga-mar')).toBeUndefined()
+    expect(lezioneAltraOccorrenza(lezioni, 'luca', 'yoga', thursday, 'yoga-mar')).toBeUndefined()
+    expect(lezioneAltraOccorrenza(lezioni, 'maria', 'yoga', new Date(2026, 9, 6, 9, 30), 'yoga-mar')).toBeUndefined()
+  })
+
+  it('lists the groups of a client', () => {
+    const corsi = [corso({ id: 'x', iscritti: ['maria'] }), corso({ id: 'y', iscritti: ['luca'] })]
+    expect(gruppiDelCliente(corsi, 'maria').map((c) => c.id)).toEqual(['x'])
   })
 })

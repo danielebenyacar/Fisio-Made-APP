@@ -81,6 +81,43 @@ export function useRegistraLezione() {
     return { tipo: 'ok', lezione, pacchetto: scelta.pacchetto }
   }
 
+  /**
+   * Records several lessons at once (e.g. "Tutti presenti") with a single
+   * "Annulla" toast. Requests without a usable package are skipped.
+   * No WhatsApp proposal: one per person would be too many.
+   */
+  async function registraMolte(reqs: RichiestaLezione[], feedback: { onUndone?: () => void } = {}): Promise<number> {
+    const created: Lezione[] = []
+    for (const req of reqs) {
+      const { scelta } = await choose(req)
+      if (scelta.tipo !== 'ok') continue
+      created.push(
+        await repository.createLezione({
+          clienteId: req.cliente.id,
+          pacchettoId: scelta.pacchetto.id,
+          disciplina: req.disciplina,
+          data: req.quando.toISOString(),
+          stato: 'fatta',
+          corsoId: req.corsoId,
+        }),
+      )
+    }
+    if (created.length > 0) {
+      showToast({
+        message: created.length === 1 ? '1 presenza segnata' : `${created.length} presenze segnate`,
+        action: {
+          label: 'Annulla',
+          onClick: async () => {
+            for (const l of created) await repository.deleteLezione(l.id)
+            feedback.onUndone?.()
+          },
+        },
+        durationMs: 5000,
+      })
+    }
+    return created.length
+  }
+
   async function proponiWhatsApp(cliente: Cliente, pacchetto: Pacchetto) {
     const lezioni = await repository.listLezioni({ clienteId: cliente.id })
     const testo = messaggioRiepilogo(cliente.nome, pacchetto, statoPacchetto(pacchetto, lezioni, new Date()))
@@ -95,5 +132,5 @@ export function useRegistraLezione() {
     })
   }
 
-  return { registra, anteprima }
+  return { registra, registraMolte, anteprima }
 }

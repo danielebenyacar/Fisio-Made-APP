@@ -25,6 +25,7 @@ describe('validateCorsoForm', () => {
       ora: '10:00',
       durataMinuti: 75,
       attivo: false,
+      iscritti: ['c1'],
       createdAt: '',
     }
     const result = validateCorsoForm(corsoToForm(corso))

@@ -55,7 +55,10 @@ export type Pacchetto = {
   createdAt: string
 }
 
-/** A weekly group class (yoga, posturale) at a fixed day and time. */
+/**
+ * A weekly group class (yoga, posturale) at a fixed day and time. Clients
+ * usually come to their own group (`iscritti`) but may switch any week.
+ */
 export type Corso = {
   id: string
   nome: string // e.g. "Yoga sera"
@@ -64,6 +67,7 @@ export type Corso = {
   ora: string // HH:mm
   durataMinuti: number
   attivo: boolean
+  iscritti: string[] // clienteId of the clients who usually come
   createdAt: string
 }
 

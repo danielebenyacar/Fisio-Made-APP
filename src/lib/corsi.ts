@@ -33,7 +33,12 @@ export function corsoToForm(corso: Corso): CorsoForm {
   }
 }
 
-export function validateCorsoForm(form: CorsoForm): { ok: true; value: NewCorso } | { ok: false; errors: CorsoFormErrors } {
+/** Class fields set by the form; enrolled clients are managed separately. */
+export type CorsoFormValue = Omit<NewCorso, 'iscritti'>
+
+export function validateCorsoForm(
+  form: CorsoForm,
+): { ok: true; value: CorsoFormValue } | { ok: false; errors: CorsoFormErrors } {
   const errors: CorsoFormErrors = {}
   const nome = collapseSpaces(form.nome)
   if (!nome) errors.nome = 'Inserisci il nome'

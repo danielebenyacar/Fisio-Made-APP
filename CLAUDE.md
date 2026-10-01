@@ -8,7 +8,7 @@ Questo file è la specifica del progetto. Leggilo per intero all'inizio di ogni 
 - **Unica utente**: la titolare. Usa l'app **dal telefono**, dimestichezza tecnologica media.
 - Vende lezioni in **pacchetti prepagati**. Problema da risolvere: tenere traccia di pagamenti, lezioni fatte/rimaste, rinnovi, scadenze, assenze, compleanni.
 - **Fisio**: sedute individuali da 1 ora, vendute a pacchetti di sedute. La prima seduta è la **valutazione posturale**, a prezzo ridotto.
-- **Yoga e posturale**: corsi di gruppo a orari fissi, più gruppi a settimana. Si vendono **abbonamenti** (es. mensile, trimestrale) che danno diritto a **1 lezione a settimana**; il cliente sceglie ogni settimana a quale gruppo venire.
+- **Yoga e posturale**: corsi di gruppo a orari fissi, più gruppi a settimana. Si vendono **abbonamenti** (es. mensile, trimestrale) che danno diritto a **1 lezione a settimana**. Ogni cliente ha di solito un **gruppo fisso**; può capitare che una settimana venga a un altro gruppo: il cambio non è sanzionato, conta come la sua lezione della settimana.
 - I clienti NON usano l'app. Ricevono il riepilogo via WhatsApp (link `wa.me` precompilato).
 - Tutta l'interfaccia è **in italiano**. Codice, nomi di file e variabili in inglese.
 
@@ -79,7 +79,7 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - abbonamento in scadenza (entro 7 giorni), abbonamento scaduto senza rinnovo, abbonamento con settimane perse
 - valutazione posturale seguita da un pacchetto di sedute; cliente senza alcun pacchetto
 - listino con almeno un tipo per disciplina e un tipo non in vendita
-- corsi settimanali di yoga e posturale (uno sospeso), con le lezioni degli abbonamenti agganciate al corso del giorno
+- corsi settimanali di yoga e posturale (uno sospeso), con le lezioni degli abbonamenti agganciate al corso del giorno e gli iscritti fissi; un cliente iscritto a un gruppo che questa settimana è venuto a un altro (cambio gruppo)
 - appuntamenti fisio: passati collegati alle lezioni, futuri, uno passato "da segnare", uno annullato, una valutazione per un cliente senza pacchetto
 - cliente senza lezioni da più di 14 giorni (assente)
 - compleanno oggi, tra 2 giorni, tra 3 giorni (alert) e tra 5 giorni (NON in alert)
@@ -164,6 +164,7 @@ type Corso = {               // gruppo che si ripete ogni settimana (yoga, postu
   ora: string                // HH:mm
   durataMinuti: number
   attivo: boolean            // false = sospeso, non compare in agenda
+  iscritti: string[]         // clienteId del gruppo fisso
   createdAt: string
 }
 
@@ -191,7 +192,8 @@ Regole derivate (funzioni pure in `src/lib/`, con unit test):
 - Vendere un pacchetto di una disciplina che il cliente non ha aggiunge quella disciplina al cliente.
 - Un pacchetto con lezioni registrate non si può eliminare.
 - Le occorrenze dei corsi non si salvano: si calcolano dal corso (giorno + ora). I presenti di un'occorrenza sono le lezioni con quel `corsoId` in quel giorno.
-- Presenze a un corso: solo dal giorno del corso in poi (non in anticipo). Se la settimana dell'abbonamento è già usata si chiede conferma ("Segna comunque"); se non c'è un abbonamento valido si propone "Nuovo pacchetto".
+- Presenze a un corso: solo dal giorno del corso in poi (non in anticipo). L'occorrenza mostra gli **iscritti fissi** con "Presente"/"Assente" a un tocco e "Tutti presenti" (salta chi non ha un abbonamento valido o è già venuto in un altro gruppo quella settimana; un solo Annulla per tutti, nessun WhatsApp). Chi cambia gruppo si aggiunge da "Da altri gruppi": la lezione conta normalmente. Se la settimana dell'abbonamento è già usata si chiede conferma ("Segna comunque"); se non c'è un abbonamento valido si propone "Nuovo pacchetto".
+- Iscritti fissi: si gestiscono dal corso (Altro → Corsi) o dalla scheda cliente ("Gruppi fissi"). Nel "+" il corso proposto è il gruppo del cliente se si tiene oggi, altrimenti quello più vicino all'ora attuale.
 - Appuntamento "fatto" → crea la lezione (FIFO) e la collega; "assente" → lezione con stato `'assente'` (se c'è un pacchetto); "Rimetti da segnare" cancella la lezione. Un appuntamento passato ancora `programmato` è "da segnare".
 
 Fuori scope per ora: incassi, fatture, report economici. Non costruirli e non aggiungere tabelle per questi.

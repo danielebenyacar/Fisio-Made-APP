@@ -55,6 +55,7 @@ export function CorsiPage() {
                         <span className="flex flex-wrap items-center gap-2 text-brand-600">
                           {orario(dataOra('2026-01-05', corso.ora), corso.durataMinuti)}
                           <DisciplinaPill disciplina={corso.disciplina} />
+                          <span>· {corso.iscritti.length === 1 ? '1 iscritto' : `${corso.iscritti.length} iscritti`}</span>
                           {!corso.attivo && <span className="font-semibold">Sospeso</span>}
                         </span>
                       </span>

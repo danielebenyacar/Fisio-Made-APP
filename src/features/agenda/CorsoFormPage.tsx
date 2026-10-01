@@ -12,6 +12,7 @@ import { PageTitle } from '../../components/PageTitle'
 import type { Corso } from '../../data'
 import { GIORNI } from '../../lib/agenda'
 import { corsoToForm, EMPTY_CORSO_FORM, validateCorsoForm, type CorsoForm, type CorsoFormErrors } from '../../lib/corsi'
+import { IscrittiCorso } from './IscrittiCorso'
 import { useCorsi } from './useCorsi'
 
 /** /altro/corsi/nuovo and /altro/corsi/:corsoId */
@@ -59,7 +60,7 @@ function CorsoFormView({ corso, goBack }: { corso?: Corso; goBack: () => void })
     setSaving(true)
     try {
       if (corso) await repository.updateCorso(corso.id, result.value)
-      else await repository.createCorso(result.value)
+      else await repository.createCorso({ ...result.value, iscritti: [] })
       goBack()
     } catch {
       setSaving(false)
@@ -149,6 +150,8 @@ function CorsoFormView({ corso, goBack }: { corso?: Corso; goBack: () => void })
           </Button>
         </div>
       </form>
+
+      {corso && <IscrittiCorso corso={corso} />}
     </>
   )
 }

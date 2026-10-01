@@ -1,4 +1,5 @@
-import { addDays } from 'date-fns'
+import { addDays, format } from 'date-fns'
+import { it } from 'date-fns/locale'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useRepository } from '../../app/dataSource'
@@ -10,11 +11,17 @@ import { ClientePicker } from '../../components/ClientePicker'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { DisciplinaPill } from '../../components/DisciplinaPill'
 import { EmptyState } from '../../components/EmptyState'
+import { CheckIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import { Sheet } from '../../components/Sheet'
 import { TONE_STYLE } from '../../components/toneStyles'
-import type { Cliente, Disciplina, Lezione, Pacchetto } from '../../data'
-import { dataOra, presentiOccorrenza } from '../../lib/agenda'
+import type { Cliente, Corso, Lezione, Pacchetto } from '../../data'
+import {
+  dataOra,
+  lezioneAltraOccorrenza,
+  presentiOccorrenza,
+  presenzaInOccorrenza,
+} from '../../lib/agenda'
 import { orario } from '../../lib/appuntamenti'
 import { fullName } from '../../lib/clienti'
 import { formatDayHeading, parseDateText } from '../../lib/dates'
@@ -40,7 +47,7 @@ export function CorsoOccorrenzaPage() {
 
   if (!valid) return <EmptyState>Data non valida.</EmptyState>
   if (error || pacchettiState.error) return <EmptyState>Non riesco a caricare il corso. Riprova tra poco.</EmptyState>
-  if (!dati || !pacchettiState.pacchetti || !pacchettiState.lezioni) return null
+  if (!dati || !pacchettiState.pacchetti) return null
   const corso = dati.corsi.find((c) => c.id === corsoId)
   if (!corso) {
     return (
@@ -54,11 +61,8 @@ export function CorsoOccorrenzaPage() {
   return (
     <Occorrenza
       key={`${corso.id}-${giorno}`}
-      corsoNome={corso.nome}
-      corsoId={corso.id}
-      disciplina={corso.disciplina}
-      inizio={dataOra(giorno, corso.ora)}
-      durataMinuti={corso.durataMinuti}
+      corso={corso}
+      corsi={dati.corsi}
       giorno={giorno}
       clienti={dati.clienti}
       lezioni={dati.lezioni}
@@ -73,11 +77,8 @@ export function CorsoOccorrenzaPage() {
 }
 
 type Props = {
-  corsoNome: string
-  corsoId: string
-  disciplina: Disciplina
-  inizio: Date
-  durataMinuti: number
+  corso: Corso
+  corsi: Corso[]
   giorno: string
   clienti: Cliente[]
   lezioni: Lezione[]
@@ -86,18 +87,17 @@ type Props = {
   goBack: () => void
 }
 
-function Occorrenza(props: Props) {
-  const { corsoNome, corsoId, disciplina, inizio, durataMinuti, giorno, clienti, lezioni, pacchetti, onChange, goBack } =
-    props
+function Occorrenza({ corso, corsi, giorno, clienti, lezioni, pacchetti, onChange, goBack }: Props) {
   const repository = useRepository()
-  const { registra } = useRegistraLezione()
+  const { registra, registraMolte } = useRegistraLezione()
   const [now] = useState(() => new Date())
   const [adding, setAdding] = useState(false)
   const [toRemove, setToRemove] = useState<Lezione | null>(null)
   const [pending, setPending] = useState<{ cliente: Cliente; scelta: SceltaPacchetto } | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  const presenti = presentiOccorrenza(lezioni, corsoId, giorno)
-  const presentIds = new Set(presenti.map((l) => l.clienteId))
+  const { disciplina } = corso
+  const inizio = dataOra(giorno, corso.ora)
   const futuro = inizio.getTime() - now.getTime() > 60 * 60 * 1000 // more than an hour ahead
   const clienteById = (id: string) => clienti.find((c) => c.id === id)
   const sceltaPer = (cliente: Cliente) =>
@@ -107,18 +107,33 @@ function Occorrenza(props: Props) {
       disciplina,
       inizio,
     )
-  // People who do this discipline (tag or package) first, not already present.
-  const candidati = clienti.filter(
+
+  const iscritti = corso.iscritti
+    .map(clienteById)
+    .filter((c): c is Cliente => c !== undefined && !c.archiviato)
+  const iscrittiIds = new Set(iscritti.map((c) => c.id))
+  const ospiti = presentiOccorrenza(lezioni, corso.id, giorno).filter((l) => !iscrittiIds.has(l.clienteId))
+  const presenteIds = new Set(presentiOccorrenza(lezioni, corso.id, giorno).map((l) => l.clienteId))
+  const daSegnare = iscritti.filter(
     (c) =>
-      !presentIds.has(c.id) &&
+      !presenzaInOccorrenza(lezioni, c.id, corso.id, giorno) &&
+      sceltaPer(c).tipo === 'ok' &&
+      !lezioneAltraOccorrenza(lezioni, c.id, disciplina, inizio, corso.id),
+  )
+  const candidatiOspiti = clienti.filter(
+    (c) =>
+      !iscrittiIds.has(c.id) &&
+      !presenteIds.has(c.id) &&
       (c.discipline.includes(disciplina) || pacchetti.some((p) => p.clienteId === c.id && p.disciplina === disciplina)),
   )
 
-  async function aggiungi(cliente: Cliente, forza = false) {
+  async function segna(cliente: Cliente, stato: 'fatta' | 'assente', forza = false) {
+    setBusy(true)
     const esito = await registra(
-      { cliente, disciplina, quando: inizio, corsoId, forzaSettimana: forza },
+      { cliente, disciplina, quando: inizio, corsoId: corso.id, stato, forzaSettimana: forza || stato === 'assente' },
       { onUndone: onChange },
     )
+    setBusy(false)
     if (esito.tipo === 'ok') {
       setPending(null)
       setAdding(false)
@@ -128,6 +143,16 @@ function Occorrenza(props: Props) {
     }
   }
 
+  async function tuttiPresenti() {
+    setBusy(true)
+    await registraMolte(
+      daSegnare.map((cliente) => ({ cliente, disciplina, quando: inizio, corsoId: corso.id })),
+      { onUndone: onChange },
+    )
+    setBusy(false)
+    onChange()
+  }
+
   async function togli() {
     if (!toRemove) return
     await repository.deleteLezione(toRemove.id)
@@ -135,33 +160,114 @@ function Occorrenza(props: Props) {
     onChange()
   }
 
+  const chip = (testo: string, tono: keyof typeof TONE_STYLE, withCheck = false) => (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm font-semibold ${TONE_STYLE[tono]}`}>
+      {withCheck && <CheckIcon width={14} height={14} strokeWidth={3} />}
+      {testo}
+    </span>
+  )
+
   return (
     <>
       <BackButton label="Agenda" onClick={goBack} />
-      <PageTitle>{corsoNome}</PageTitle>
+      <PageTitle>{corso.nome}</PageTitle>
       <p className="mt-1 text-brand-700 first-letter:uppercase">
-        {formatDayHeading(inizio)} · {orario(inizio, durataMinuti)}
+        {formatDayHeading(inizio)} · {orario(inizio, corso.durataMinuti)}
       </p>
       <div className="mt-2">
         <DisciplinaPill disciplina={disciplina} />
       </div>
 
-      <h2 className="mt-6 mb-2 text-xl font-bold">
-        Presenti {presenti.length > 0 && <span className="text-brand-600">({presenti.length})</span>}
-      </h2>
-      {presenti.length === 0 ? (
-        <EmptyState>{futuro ? 'Il corso non è ancora iniziato.' : 'Nessuna presenza segnata.'}</EmptyState>
+      <div className="mt-6 mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold">
+          Iscritti {iscritti.length > 0 && <span className="text-brand-600">({iscritti.length})</span>}
+        </h2>
+        {!futuro && daSegnare.length > 1 && (
+          <Button className="shrink-0" disabled={busy} onClick={tuttiPresenti}>
+            Tutti presenti
+          </Button>
+        )}
+      </div>
+      {futuro && <p className="mb-2 text-brand-600">Le presenze si segnano dal giorno del corso.</p>}
+
+      {iscritti.length === 0 ? (
+        <EmptyState>
+          Nessun iscritto fisso. Aggiungili da Altro → Corsi, oppure dalla scheda del cliente.
+        </EmptyState>
       ) : (
         <ul className="divide-y divide-brand-200 overflow-hidden rounded-2xl bg-white shadow-sm">
-          {presenti.map((l) => {
+          {iscritti.map((cliente) => {
+            const presenza = presenzaInOccorrenza(lezioni, cliente.id, corso.id, giorno)
+            const altrove = presenza ? undefined : lezioneAltraOccorrenza(lezioni, cliente.id, disciplina, inizio, corso.id)
+            const scelta = presenza || futuro ? null : sceltaPer(cliente)
+            return (
+              <li key={cliente.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-lg">
+                    {cliente.nome} <strong className="font-semibold">{cliente.cognome}</strong>
+                  </span>
+                  {presenza && (
+                    <span className="flex items-center gap-1">
+                      {presenza.stato === 'fatta' ? chip('Presente', 'ok', true) : chip('Assente', 'neutro')}
+                      <button
+                        type="button"
+                        onClick={() => setToRemove(presenza)}
+                        aria-label={`Togli ${presenza.stato === 'fatta' ? 'presenza' : 'assenza'} di ${cliente.nome}`}
+                        className="min-h-12 rounded-xl px-2 font-semibold text-danger-700 underline"
+                      >
+                        Togli
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {altrove && (
+                  <p className="mt-1 font-semibold text-warning-900">
+                    Già venuto/a questa settimana:{' '}
+                    {format(new Date(altrove.data), 'EEEE d', { locale: it })}
+                    {altrove.corsoId ? ` (${corsi.find((c) => c.id === altrove.corsoId)?.nome ?? 'altro gruppo'})` : ''}
+                  </p>
+                )}
+                {!altrove && scelta && scelta.tipo !== 'ok' && (
+                  <p className="mt-1">{chip(SCELTA_LABEL[scelta.tipo].testo, SCELTA_LABEL[scelta.tipo].tono)}</p>
+                )}
+                {!futuro && !presenza && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button disabled={busy} onClick={() => segna(cliente, 'fatta')}>
+                      Presente
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={busy || scelta?.tipo === 'nessuno'}
+                      onClick={() => segna(cliente, 'assente')}
+                    >
+                      Assente
+                    </Button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {(ospiti.length > 0 || !futuro) && (
+        <>
+          <h2 className="mt-6 mb-1 text-xl font-bold">Da altri gruppi</h2>
+          <p className="mb-2 text-brand-600">Chi cambia gruppo questa settimana: conta come la sua lezione della settimana.</p>
+        </>
+      )}
+      {ospiti.length > 0 && (
+        <ul className="mb-3 divide-y divide-brand-200 overflow-hidden rounded-2xl bg-white shadow-sm">
+          {ospiti.map((l) => {
             const cliente = clienteById(l.clienteId)
             return (
-              <li key={l.id} className="flex min-h-14 items-center gap-3 px-4 py-2">
+              <li key={l.id} className="flex min-h-14 flex-wrap items-center gap-2 px-4 py-2">
                 <span className="flex-1 text-lg">{cliente ? fullName(cliente) : 'Cliente non trovato'}</span>
+                {l.stato === 'fatta' ? chip('Presente', 'ok', true) : chip('Assente', 'neutro')}
                 <button
                   type="button"
                   onClick={() => setToRemove(l)}
-                  className="min-h-12 rounded-xl px-3 font-semibold text-danger-700 underline"
+                  className="min-h-12 rounded-xl px-2 font-semibold text-danger-700 underline"
                 >
                   Togli
                 </button>
@@ -170,24 +276,17 @@ function Occorrenza(props: Props) {
           })}
         </ul>
       )}
-
-      <div className="mt-4">
-        {futuro ? (
-          <p className="text-brand-600">Le presenze si segnano dal giorno del corso.</p>
-        ) : adding ? (
+      {!futuro &&
+        (adding ? (
           <div className="flex flex-col gap-3">
             <ClientePicker
-              clienti={candidati.length > 0 ? candidati : clienti.filter((c) => !presentIds.has(c.id))}
+              clienti={candidatiOspiti}
               autoFocus
-              placeholder="Chi è venuto?"
-              onSelect={(cliente) => aggiungi(cliente)}
+              placeholder="Chi è venuto da un altro gruppo?"
+              onSelect={(cliente) => segna(cliente, 'fatta')}
               dettaglio={(cliente) => {
                 const label = SCELTA_LABEL[sceltaPer(cliente).tipo]
-                return (
-                  <span className={`self-start rounded-full border px-2.5 py-0.5 text-sm font-semibold ${TONE_STYLE[label.tono]}`}>
-                    {label.testo}
-                  </span>
-                )
+                return <span className="self-start">{chip(label.testo, label.tono)}</span>
               }}
             />
             <Button variant="secondary" onClick={() => setAdding(false)}>
@@ -195,14 +294,15 @@ function Occorrenza(props: Props) {
             </Button>
           </div>
         ) : (
-          <Button onClick={() => setAdding(true)}>Aggiungi presente</Button>
-        )}
-      </div>
+          <Button variant="secondary" onClick={() => setAdding(true)}>
+            Aggiungi da un altro gruppo
+          </Button>
+        ))}
 
       <ConfirmSheet
         open={toRemove !== null}
-        title="Togliere la presenza?"
-        message={`La lezione di ${toRemove ? fullName(clienteById(toRemove.clienteId) ?? { nome: '', cognome: '' }) : ''} viene cancellata e torna disponibile nel suo abbonamento.`}
+        title={toRemove?.stato === 'assente' ? 'Togliere l’assenza?' : 'Togliere la presenza?'}
+        message={`La registrazione di ${toRemove ? fullName(clienteById(toRemove.clienteId) ?? { nome: '', cognome: '' }) : ''} viene cancellata${toRemove?.stato === 'fatta' ? ' e la lezione torna disponibile nel suo abbonamento' : ''}.`}
         confirmLabel="Togli"
         onConfirm={togli}
         onCancel={() => setToRemove(null)}
@@ -219,7 +319,7 @@ function Occorrenza(props: Props) {
               comunque?
             </p>
             <div className="mt-6 flex flex-col gap-3">
-              <Button onClick={() => aggiungi(pending.cliente, true)}>Segna comunque</Button>
+              <Button onClick={() => segna(pending.cliente, 'fatta', true)}>Segna comunque</Button>
               <Button variant="secondary" onClick={() => setPending(null)}>
                 Annulla
               </Button>

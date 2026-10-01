@@ -123,7 +123,12 @@ function DisciplinaRiga({ disciplina, cliente, pacchetti, lezioni, corsi, now, o
   const selectId = useId()
   const scelta = pacchettoPerLezione(pacchetti, lezioni, disciplina, now)
   const oggi = occorrenzeCorsi(corsi.filter((c) => c.disciplina === disciplina), [now])
-  const [corsoId, setCorsoId] = useState(() => corsoPiuVicino(corsi, disciplina, now)?.corso.id ?? '')
+  const [corsoId, setCorsoId] = useState(
+    () =>
+      oggi.find((o) => o.corso.iscritti.includes(cliente.id))?.corso.id ??
+      corsoPiuVicino(corsi, disciplina, now)?.corso.id ??
+      '',
+  )
   const [busy, setBusy] = useState(false)
   const label = DISCIPLINA_LABEL[disciplina]
 
@@ -170,6 +175,7 @@ function DisciplinaRiga({ disciplina, cliente, pacchetti, lezioni, corsi, now, o
                 {oggi.map((o) => (
                   <option key={o.corso.id} value={o.corso.id}>
                     {o.corso.nome} · {format(o.inizio, 'HH:mm')}
+                    {o.corso.iscritti.includes(cliente.id) ? ' (il suo gruppo)' : ''}
                   </option>
                 ))}
                 <option value="">Nessun corso (lezione a parte)</option>

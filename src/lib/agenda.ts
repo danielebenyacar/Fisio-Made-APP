@@ -1,5 +1,5 @@
 import { addDays, addMinutes, getISODay, startOfDay, startOfWeek } from 'date-fns'
-import type { Appuntamento, Corso, Lezione } from '../data/types'
+import type { Appuntamento, Corso, Disciplina, Lezione } from '../data/types'
 import { toIsoDate } from './dates'
 import { parseIsoDate } from './packages'
 
@@ -69,4 +69,46 @@ export function corsoPiuVicino(corsi: Corso[], disciplina: Corso['disciplina'], 
 /** A scheduled appointment whose time has passed without being marked. */
 export function daSegnare(appuntamento: Appuntamento, now: Date): boolean {
   return appuntamento.stato === 'programmato' && new Date(appuntamento.inizio) < now
+}
+
+/** The lesson (done or absence) of a client in one session of a class, if recorded. */
+export function presenzaInOccorrenza(
+  lezioni: Lezione[],
+  clienteId: string,
+  corsoId: string,
+  giorno: string,
+): Lezione | undefined {
+  return presentiOccorrenza(lezioni, corsoId, giorno).find((l) => l.clienteId === clienteId)
+}
+
+/**
+ * A lesson already done the same week (Monday–Sunday) in another session,
+ * e.g. the client switched group this week.
+ */
+export function lezioneAltraOccorrenza(
+  lezioni: Lezione[],
+  clienteId: string,
+  disciplina: Disciplina,
+  quando: Date,
+  corsoId: string,
+): Lezione | undefined {
+  const start = inizioSettimana(quando)
+  const end = addDays(start, 7)
+  const giorno = toIsoDate(quando)
+  return lezioni.find((l) => {
+    const data = new Date(l.data)
+    return (
+      l.clienteId === clienteId &&
+      l.disciplina === disciplina &&
+      l.stato === 'fatta' &&
+      data >= start &&
+      data < end &&
+      !(l.corsoId === corsoId && toIsoDate(data) === giorno)
+    )
+  })
+}
+
+/** The fixed groups of a client. */
+export function gruppiDelCliente(corsi: Corso[], clienteId: string): Corso[] {
+  return corsi.filter((c) => c.iscritti.includes(clienteId))
 }

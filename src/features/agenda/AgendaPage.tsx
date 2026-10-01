@@ -17,7 +17,7 @@ import { parseIsoDate } from '../../lib/packages'
 import { useAgenda } from './useAgenda'
 
 type Voce =
-  | { tipo: 'corso'; inizio: Date; occorrenza: Occorrenza; presenti: number }
+  | { tipo: 'corso'; inizio: Date; occorrenza: Occorrenza; presenti: number; iscritti: number }
   | { tipo: 'appuntamento'; inizio: Date; appuntamento: Appuntamento; cliente?: Cliente }
 
 export function AgendaPage() {
@@ -37,7 +37,11 @@ export function AgendaPage() {
           tipo: 'corso' as const,
           inizio: occorrenza.inizio,
           occorrenza,
-          presenti: presentiOccorrenza(dati.lezioni, occorrenza.corso.id, occorrenza.giorno).length,
+          presenti: presentiOccorrenza(dati.lezioni, occorrenza.corso.id, occorrenza.giorno).filter(
+            (l) => l.stato === 'fatta',
+          ).length,
+          iscritti: occorrenza.corso.iscritti.filter((id) => dati.clienti.some((c) => c.id === id && !c.archiviato))
+            .length,
         })),
         ...dati.appuntamenti.map((appuntamento) => ({
           tipo: 'appuntamento' as const,
@@ -140,7 +144,9 @@ export function AgendaPage() {
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate font-semibold">{voce.occorrenza.corso.nome}</span>
                       <span className="text-brand-600">
-                        Gruppo · {voce.presenti === 1 ? '1 presente' : `${voce.presenti} presenti`}
+                        {voce.inizio > now
+                          ? `Gruppo · ${voce.iscritti === 1 ? '1 iscritto' : `${voce.iscritti} iscritti`}`
+                          : `Gruppo · ${voce.presenti}/${voce.iscritti} presenti`}
                       </span>
                     </span>
                     <ChevronRightIcon className="shrink-0 text-brand-400" />

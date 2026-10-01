@@ -171,7 +171,7 @@ describe('MockRepository', () => {
     const corsi = await repo.listCorsi()
     const keys = corsi.map((c) => `${c.giorno} ${c.ora}`)
     expect(keys).toEqual([...keys].sort())
-    const created = await repo.createCorso({ nome: 'Yoga domenica', disciplina: 'yoga', giorno: 7, ora: '10:00', durataMinuti: 75, attivo: true })
+    const created = await repo.createCorso({ nome: 'Yoga domenica', disciplina: 'yoga', giorno: 7, ora: '10:00', durataMinuti: 75, attivo: true, iscritti: [] })
     expect((await repo.listCorsi()).at(-1)).toEqual(created)
     expect(await repo.updateCorso(created.id, { attivo: false })).toMatchObject({ attivo: false, durataMinuti: 75 })
     await expect(repo.updateCorso('missing', {})).rejects.toThrow('Corso non trovato')

@@ -22,7 +22,7 @@ export type DemoData = {
   appuntamenti: Appuntamento[]
 }
 
-type CorsoSeed = Omit<Corso, 'id' | 'createdAt' | 'durataMinuti' | 'attivo'> & { attivo?: false }
+type CorsoSeed = Omit<Corso, 'id' | 'createdAt' | 'durataMinuti' | 'attivo' | 'iscritti'> & { attivo?: false }
 
 // Weekly group classes: one yoga and one posturale every weekday, plus a suspended one.
 const CORSI: CorsoSeed[] = [
@@ -291,7 +291,14 @@ export function createSeed(now: Date): DemoData {
   let appuntamentoSeq = 0
 
   CORSI.forEach((corso, i) => {
-    data.corsi.push({ durataMinuti: 60, attivo: true, ...corso, id: `demo-corso-${pad(i + 1, 2)}`, createdAt: listinoCreated })
+    data.corsi.push({
+      durataMinuti: 60,
+      attivo: true,
+      iscritti: [],
+      ...corso,
+      id: `demo-corso-${pad(i + 1, 2)}`,
+      createdAt: listinoCreated,
+    })
   })
   const corsoDi = (disciplina: Disciplina, giorno: number) =>
     data.corsi.find((c) => c.attivo && c.disciplina === disciplina && c.giorno === giorno)
@@ -399,6 +406,22 @@ export function createSeed(now: Date): DemoData {
       }
     }
   })
+
+  // Fixed groups: everyone with a subscription belongs to the group of their
+  // latest lesson. Federica belongs to another yoga group: her lessons there
+  // show a change of group (allowed, not penalised).
+  for (const cliente of data.clienti.filter((c) => !c.archiviato)) {
+    for (const disciplina of ['posturale', 'yoga'] as const) {
+      const last = data.lezioni.filter((l) => l.clienteId === cliente.id && l.disciplina === disciplina && l.corsoId).at(-1)
+      if (!last) continue
+      let corso = data.corsi.find((c) => c.id === last.corsoId)!
+      if (cliente.nome === 'Federica') {
+        const same = data.corsi.filter((c) => c.attivo && c.disciplina === disciplina)
+        corso = same[(same.indexOf(corso) + 1) % same.length]
+      }
+      corso.iscritti.push(cliente.id)
+    }
+  }
 
   for (const a of APPUNTAMENTI) {
     const cliente = data.clienti.find((c) => c.nome === a.cliente)!
