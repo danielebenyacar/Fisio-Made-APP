@@ -1,0 +1,17 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[context.production.environment]
+  VITE_DATA_MODE = "mock"   # diventa "supabase" nel Modulo 5
+
+[context.deploy-preview.environment]
+  VITE_DATA_MODE = "mock"
+
+[context.branch-deploy.environment]
+  VITE_DATA_MODE = "mock"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
