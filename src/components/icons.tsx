@@ -57,3 +57,54 @@ export function MoreIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 6 9 17l-5-5" />
+    </Icon>
+  )
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  )
+}
+
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m15 18-6-6 6-6" />
+    </Icon>
+  )
+}
+
+export function SearchIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </Icon>
+  )
+}
+
+export function AlertIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4M12 17h.01" />
+    </Icon>
+  )
+}
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m17 8-5-5-5 5M12 3v12" />
+    </Icon>
+  )
+}

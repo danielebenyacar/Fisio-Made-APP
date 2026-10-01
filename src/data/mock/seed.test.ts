@@ -89,6 +89,26 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     expect(birthdays(5).map((c) => c.nome)).toEqual(['Elena'])
   })
 
+  it('tags clients with every discipline, alone and combined', () => {
+    for (const c of data.clienti) {
+      expect(c.discipline.every((d) => ['fisio', 'posturale', 'yoga'].includes(d))).toBe(true)
+    }
+    const count = (n: number) => data.clienti.filter((c) => c.discipline.length === n).length
+    expect(count(0)).toBeGreaterThan(0)
+    expect(count(1)).toBeGreaterThan(0)
+    expect(count(2)).toBeGreaterThan(0)
+    expect(count(3)).toBeGreaterThan(0)
+    for (const d of ['fisio', 'posturale', 'yoga'] as const) {
+      expect(data.clienti.filter((c) => !c.archiviato && c.discipline.includes(d)).length).toBeGreaterThan(2)
+    }
+  })
+
+  it('has a client still missing the privacy consent', () => {
+    const missing = data.clienti.filter((c) => !c.consensoPrivacy)
+    expect(missing.map((c) => c.nome)).toEqual(['Paolo'])
+    expect(missing[0].consensoData).toBeUndefined()
+  })
+
   it('has a client without phone and an archived client', () => {
     expect(data.clienti.filter((c) => !c.telefono).map((c) => c.nome)).toEqual(['Simone'])
     expect(data.clienti.filter((c) => c.archiviato).map((c) => c.nome)).toEqual(['Martina'])

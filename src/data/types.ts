@@ -1,7 +1,11 @@
+export const DISCIPLINE = ['fisio', 'posturale', 'yoga'] as const
+export type Disciplina = (typeof DISCIPLINE)[number]
+
 export type Cliente = {
   id: string
   nome: string
   cognome: string
+  discipline: Disciplina[] // zero, one or more, in DISCIPLINE order
   telefono?: string // E.164, e.g. +393331234567
   email?: string
   dataNascita?: string // YYYY-MM-DD

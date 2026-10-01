@@ -12,7 +12,7 @@ import type {
 import { createSeed, type DemoData } from './seed'
 
 export const STORAGE_KEY = 'fisiomade-demo'
-const STORAGE_VERSION = 1
+const STORAGE_VERSION = 2 // bump when the data shape changes: old demo data is reseeded
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 

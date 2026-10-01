@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useDataSource } from '../../app/dataSource'
 import { Button } from '../../components/Button'
+import { ButtonLink } from '../../components/ButtonLink'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
+import { UploadIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import type { DataSource } from '../../data'
 
@@ -67,6 +69,18 @@ export function AltroPage() {
     <>
       <PageTitle>Altro</PageTitle>
       <div className="mt-6 flex flex-col gap-4">
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Importa clienti</h2>
+          <p className="mt-2 text-brand-700">
+            Aggiungi in un colpo solo i clienti che hai già in un file Excel.
+          </p>
+          <div className="mt-5">
+            <ButtonLink to="/altro/importa" variant="secondary">
+              <UploadIcon width={20} height={20} />
+              Importa da Excel
+            </ButtonLink>
+          </div>
+        </section>
         {source.mode === 'mock' && <DemoDataCard source={source} />}
       </div>
     </>

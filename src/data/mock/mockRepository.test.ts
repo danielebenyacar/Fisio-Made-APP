@@ -40,6 +40,7 @@ describe('MockRepository', () => {
     const created = await make().createCliente({
       nome: 'Nuova',
       cognome: 'Cliente',
+      discipline: ['fisio', 'yoga'],
       consensoPrivacy: true,
     })
     expect(created).toMatchObject({ id: 'new-1', archiviato: false, createdAt: NOW.toISOString() })
@@ -50,6 +51,10 @@ describe('MockRepository', () => {
     storage.setItem(STORAGE_KEY, '{not json')
     expect((await make().listClienti()).length).toBeGreaterThan(10)
     storage.setItem(STORAGE_KEY, JSON.stringify({ version: 999, clienti: [] }))
+    expect((await make().listClienti()).length).toBeGreaterThan(10)
+    // Version 1 (Module 0) had no disciplines: it must be replaced too.
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, clienti: [], pacchetti: [], lezioni: [] }))
+    expect((await make().listClienti()).every((c) => Array.isArray(c.discipline))).toBe(true)
     expect((await make().listClienti()).length).toBeGreaterThan(10)
   })
 
@@ -71,7 +76,7 @@ describe('MockRepository', () => {
 
   it('creates and updates packages, oldest first per client', async () => {
     const repo = make()
-    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', consensoPrivacy: true })
+    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
     await expect(
       repo.createPacchetto({ clienteId: 'missing', lezioniTotali: 5, pagato: true, dataAcquisto: '2026-10-01' }),
     ).rejects.toThrow('Cliente non trovato')
@@ -89,7 +94,7 @@ describe('MockRepository', () => {
 
   it('creates lessons as "fatta" by default and deletes them', async () => {
     const repo = make()
-    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', consensoPrivacy: true })
+    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
     const pacchetto = await repo.createPacchetto({ clienteId: cliente.id, lezioniTotali: 5, pagato: true, dataAcquisto: '2026-10-01' })
 
     const lezione = await repo.createLezione({ clienteId: cliente.id, pacchettoId: pacchetto.id, data: NOW.toISOString() })
@@ -104,7 +109,7 @@ describe('MockRepository', () => {
   it('rejects a lesson on another client’s package', async () => {
     const repo = make()
     const [pacchetto] = await repo.listPacchetti()
-    const other = await repo.createCliente({ nome: 'A', cognome: 'B', consensoPrivacy: true })
+    const other = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
     await expect(
       repo.createLezione({ clienteId: other.id, pacchettoId: pacchetto.id, data: NOW.toISOString() }),
     ).rejects.toThrow('altro cliente')
@@ -113,7 +118,7 @@ describe('MockRepository', () => {
   it('reset() discards changes and restores the demo data', async () => {
     const repo = make()
     const before = await repo.listClienti()
-    await repo.createCliente({ nome: 'Temporanea', cognome: 'Zeta', consensoPrivacy: false })
+    await repo.createCliente({ nome: 'Temporanea', cognome: 'Zeta', discipline: ['yoga'], consensoPrivacy: false })
     await repo.updateCliente(before[0].id, { nome: 'Cambiato' })
 
     await repo.reset()

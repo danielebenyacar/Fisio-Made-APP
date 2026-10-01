@@ -3,6 +3,7 @@ import type { Repository } from './repository'
 
 export type { Repository } from './repository'
 export type * from './types'
+export { DISCIPLINE } from './types'
 
 export type DataMode = 'mock' | 'supabase'
 
