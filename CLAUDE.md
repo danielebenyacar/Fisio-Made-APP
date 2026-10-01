@@ -77,6 +77,7 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - cliente senza lezioni da più di 14 giorni (assente)
 - compleanno oggi, tra 2 giorni, tra 3 giorni (alert) e tra 5 giorni (NON in alert)
 - cliente con pacchetto nuovo acquistato mentre il vecchio ha ancora residue
+- cliente con un'assenza registrata (verifica che non scali le residue)
 - cliente senza telefono (il pulsante WhatsApp deve essere disabilitato)
 - cliente archiviato
 - clienti "normali" senza alert
@@ -115,16 +116,19 @@ type Lezione = {
   pacchettoId: string
   clienteId: string
   data: string               // ISO datetime
+  stato: 'fatta' | 'assente' // default 'fatta'
   note?: string
   createdAt: string
 }
 ```
 
 Regole derivate (funzioni pure in `src/lib/`, con unit test):
-- `residue = lezioniTotali - numero lezioni del pacchetto`
+- `residue = lezioniTotali - numero lezioni con stato 'fatta' del pacchetto`
 - Una nuova lezione scala dal **pacchetto più vecchio con residue > 0** (FIFO).
 - Se il cliente non ha pacchetti con residue, "Segna lezione" chiede di creare prima un pacchetto (non si va in negativo).
-- Ogni lezione registrata scala 1. TODO: regola per disdette/assenze addebitate, da confermare con la titolare.
+- **Le assenze NON scalano lezioni.** Si registrano solo per storico (stato `'assente'`), non toccano le residue né il badge `x/y`.
+- Il calcolo delle residue sta in un'unica funzione (`src/lib/packages.ts`) così la regola futura si aggiunge in un solo punto.
+- Fase 2 (NON implementare ora): un'assenza va recuperata entro la settimana corrente, altrimenti la lezione viene scalata.
 
 Fuori scope per ora: incassi, fatture, report economici. Non costruirli e non aggiungere tabelle per questi.
 
@@ -197,12 +201,12 @@ Si costruisce a moduli per poter mostrare alla titolare l'avanzamento passo per 
 - **M0 — Setup**: progetto Vite/React/TS/Tailwind, lint, Vitest, `netlify.toml`, layout con bottom nav (schermate vuote), livello dati con interfaccia + mock repository + seed, banner DEMO, "Reimposta dati demo".
 - **M1 — Clienti**: lista con ricerca, dettaglio cliente, crea/modifica/archivia, campo consenso privacy.
 - **M2 — Pacchetti**: crea pacchetto dal dettaglio cliente, segna pagato, calcolo residue, badge `x/y`, storico pacchetti.
-- **M3 — Segna lezione**: flusso dal "+", regola FIFO, toast Annulla, WhatsApp di riepilogo, storico lezioni nel dettaglio cliente.
+- **M3 — Segna lezione**: flusso dal "+", regola FIFO, toast Annulla, WhatsApp di riepilogo, storico lezioni nel dettaglio cliente. Nel dettaglio cliente pulsante secondario "Segna assenza" (non scala, compare nello storico con etichetta "Assenza"). Il flusso principale del "+" registra solo lezioni fatte.
 - **M4 — Oggi**: alert con priorità e pulsanti d'azione, auguri WhatsApp.
 - **M5 — Supabase**: migration SQL (tabelle, vincoli, indici), Row Level Security che consente accesso solo all'utente autenticato, login email+password, supabase repository, cambio di `VITE_DATA_MODE` in produzione. Il SQL va in `supabase/migrations/` e lo sviluppatore lo esegue a mano nel SQL editor.
 - **M6 — Rifinitura**: installazione PWA (icona, nome "Fisio Made"), stati vuoti, GitHub Actions per keep-alive di Supabase (ping ogni 3 giorni) e backup settimanale.
 
-Fase 2 (non ora): schede di valutazione con export PDF, messaggi di auguri semi-automatici.
+Fase 2 (non ora): schede di valutazione con export PDF, messaggi di auguri semi-automatici, regola di recupero assenze entro la settimana.
 
 ## 11. Sicurezza e privacy
 
