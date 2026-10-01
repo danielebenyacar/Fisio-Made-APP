@@ -19,6 +19,7 @@ import { fullName } from '../../lib/clienti'
 import { formatDayHeading } from '../../lib/dates'
 import { messaggioPromemoria } from '../../lib/messaggi'
 import { linkWhatsApp } from '../../lib/whatsapp'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 import { useRegistraLezione } from '../lezioni/useRegistraLezione'
 
 function useAppuntamento(id: string | undefined) {
@@ -65,6 +66,7 @@ type DettaglioProps = { appuntamento: Appuntamento; cliente: Cliente; reload: ()
 function Dettaglio({ appuntamento, cliente, reload, goBack }: DettaglioProps) {
   const repository = useRepository()
   const { registra } = useRegistraLezione()
+  const { aggiungi, rimuoviSeNonUsata } = useDisciplineAutomatiche()
   const [now] = useState(() => new Date())
   const [confirm, setConfirm] = useState<'annulla' | 'riapri' | null>(null)
   const [senzaPacchetto, setSenzaPacchetto] = useState(false)
@@ -112,12 +114,15 @@ function Dettaglio({ appuntamento, cliente, reload, goBack }: DettaglioProps) {
 
   async function ripristina() {
     await torna()
+    await aggiungi(cliente.id, appuntamento.disciplina)
     reload()
   }
 
   async function annulla() {
     setConfirm(null)
     await repository.updateAppuntamento(appuntamento.id, { stato: 'annullato' })
+    // A cancelled first booking leaves the client without that discipline.
+    await rimuoviSeNonUsata(cliente.id, appuntamento.disciplina)
     reload()
   }
 

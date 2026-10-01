@@ -12,6 +12,7 @@ import { PageTitle } from '../../components/PageTitle'
 import type { Corso } from '../../data'
 import { GIORNI } from '../../lib/agenda'
 import { corsoToForm, EMPTY_CORSO_FORM, validateCorsoForm, type CorsoForm, type CorsoFormErrors } from '../../lib/corsi'
+import { DISCIPLINA_LABEL, DISCIPLINE_GRUPPO } from '../../lib/discipline'
 import { IscrittiCorso } from './IscrittiCorso'
 import { useCorsi } from './useCorsi'
 
@@ -74,20 +75,16 @@ function CorsoFormView({ corso, goBack }: { corso?: Corso; goBack: () => void })
       <PageTitle>{corso ? 'Modifica corso' : 'Nuovo corso'}</PageTitle>
 
       <form noValidate onSubmit={handleSubmit} className="mt-5 flex flex-col gap-5">
-        <TextField
-          id={fieldId('nome')}
-          label="Nome *"
-          value={form.nome}
-          onChange={(e) => set('nome', e.target.value)}
-          error={errors.nome}
-          placeholder="Es. Yoga sera"
-          autoComplete="off"
-        />
         <div>
           <p id={fieldId('disciplina')} className="mb-1.5 font-semibold">
             Disciplina *
           </p>
-          <DisciplinaPicker value={form.disciplina} onChange={(d) => set('disciplina', d)} labelledBy={fieldId('disciplina')} />
+          <DisciplinaPicker
+            value={form.disciplina}
+            onChange={(d) => set('disciplina', d)}
+            labelledBy={fieldId('disciplina')}
+            options={DISCIPLINE_GRUPPO}
+          />
           {errors.disciplina && <p className="mt-1.5 font-semibold text-danger-700">{errors.disciplina}</p>}
         </div>
         <div>
@@ -132,6 +129,14 @@ function CorsoFormView({ corso, goBack }: { corso?: Corso; goBack: () => void })
             error={errors.durataMinuti}
           />
         </div>
+        <TextField
+          id={fieldId('nome')}
+          label="Nome (facoltativo)"
+          value={form.nome}
+          onChange={(e) => set('nome', e.target.value)}
+          placeholder={form.disciplina ? `Se vuoto: ${DISCIPLINA_LABEL[form.disciplina]}` : 'Es. Yoga sera'}
+          autoComplete="off"
+        />
         <CheckboxRow checked={form.attivo} onChange={(v) => set('attivo', v)}>
           Attivo (compare in agenda)
         </CheckboxRow>

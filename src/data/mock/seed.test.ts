@@ -1,6 +1,7 @@
 import { addDays, format, getISODay, isValid, parseISO } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 import { toIsoDate } from '../../lib/dates'
+import { disciplineInUso } from '../../lib/discipline'
 import { pacchettiInEvidenza, settimaneAbbonamento, statoPacchetto } from '../../lib/packages'
 import type { Cliente } from '../types'
 import { createSeed, type DemoData } from './seed'
@@ -168,18 +169,25 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     expect(birthdays(5).map((c) => c.nome)).toEqual(['Elena'])
   })
 
-  it('tags clients with every discipline, alone and combined', () => {
+  it('tags clients with one, two and three disciplines, consistent with what they do', () => {
     for (const c of data.clienti) {
       expect(c.discipline.every((d) => ['fisio', 'posturale', 'yoga'].includes(d))).toBe(true)
+      // Every discipline backed by a group, a session or a package is there.
+      expect(disciplineInUso(c.id, data).every((d) => c.discipline.includes(d))).toBe(true)
     }
     const count = (n: number) => data.clienti.filter((c) => c.discipline.length === n).length
-    expect(count(0)).toBeGreaterThan(0)
     expect(count(1)).toBeGreaterThan(0)
     expect(count(2)).toBeGreaterThan(0)
     expect(count(3)).toBeGreaterThan(0)
     for (const d of ['fisio', 'posturale', 'yoga'] as const) {
       expect(data.clienti.filter((c) => !c.archiviato && c.discipline.includes(d)).length).toBeGreaterThan(2)
     }
+    // Paolo has only a booked assessment: that is enough to make him a fisio client.
+    expect(byName(data, 'Paolo').discipline).toEqual(['fisio'])
+  })
+
+  it('has groups of yoga and posturale only', () => {
+    expect(data.corsi.every((c) => c.disciplina === 'yoga' || c.disciplina === 'posturale')).toBe(true)
   })
 
   it('has a client still missing the privacy consent', () => {

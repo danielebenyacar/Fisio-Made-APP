@@ -5,24 +5,32 @@ import { ClientePicker } from '../../components/ClientePicker'
 import { EmptyState } from '../../components/EmptyState'
 import type { Corso } from '../../data'
 import { useClienti } from '../clienti/useClienti'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 
 /** Enrolled clients of a class, saved as soon as they change. */
 export function IscrittiCorso({ corso }: { corso: Corso }) {
   const repository = useRepository()
+  const { aggiungi, rimuoviSeNonUsata } = useDisciplineAutomatiche()
   const { clienti } = useClienti()
   const [iscritti, setIscritti] = useState(corso.iscritti)
   const [adding, setAdding] = useState(false)
 
-  async function save(next: string[]) {
+  async function save(next: string[], cambiato: { clienteId: string; iscritto: boolean }) {
     setIscritti(next)
     await repository.updateCorso(corso.id, { iscritti: next })
+    // Joining a group makes the client do its discipline; leaving the last one undoes it.
+    if (cambiato.iscritto) await aggiungi(cambiato.clienteId, corso.disciplina)
+    else await rimuoviSeNonUsata(cambiato.clienteId, corso.disciplina)
   }
 
   if (!clienti) return null
   const enrolled = iscritti.map((id) => clienti.find((c) => c.id === id)).filter((c) => c !== undefined)
-  // Clients doing this discipline first; everyone else only if nobody does.
+  // Everyone can join; clients already doing this discipline come first.
   const candidates = clienti.filter((c) => !iscritti.includes(c.id))
-  const sameDiscipline = candidates.filter((c) => c.discipline.includes(corso.disciplina))
+  const ordered = [
+    ...candidates.filter((c) => c.discipline.includes(corso.disciplina)),
+    ...candidates.filter((c) => !c.discipline.includes(corso.disciplina)),
+  ]
 
   return (
     <section className="mt-8 border-t border-brand-200 pt-6">
@@ -43,7 +51,7 @@ export function IscrittiCorso({ corso }: { corso: Corso }) {
               </span>
               <button
                 type="button"
-                onClick={() => save(iscritti.filter((id) => id !== c.id))}
+                onClick={() => save(iscritti.filter((id) => id !== c.id), { clienteId: c.id, iscritto: false })}
                 className="min-h-12 rounded-xl px-2 font-semibold text-danger-700 underline"
               >
                 Togli
@@ -56,11 +64,11 @@ export function IscrittiCorso({ corso }: { corso: Corso }) {
         {adding ? (
           <div className="flex flex-col gap-3">
             <ClientePicker
-              clienti={sameDiscipline.length > 0 ? sameDiscipline : candidates}
+              clienti={ordered}
               autoFocus
               placeholder="Chi aggiungere al gruppo?"
               onSelect={(c) => {
-                void save([...iscritti, c.id])
+                void save([...iscritti, c.id], { clienteId: c.id, iscritto: true })
                 setAdding(false)
               }}
             />

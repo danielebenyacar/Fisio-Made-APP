@@ -26,6 +26,7 @@ import {
 import { fullName } from '../../lib/clienti'
 import { parseDateText, toIsoDate } from '../../lib/dates'
 import { parseIsoDate } from '../../lib/packages'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 
 type Dati = { clienti: Cliente[]; pacchetti: Pacchetto[]; appuntamento?: Appuntamento | null }
 
@@ -80,6 +81,7 @@ type FormViewProps = {
 
 function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewProps) {
   const repository = useRepository()
+  const { aggiungi, rimuoviSeNonUsata } = useDisciplineAutomatiche()
   const ids = useId()
   const fieldId = (name: string) => `${ids}-${name}`
   const [now] = useState(() => new Date())
@@ -141,9 +143,12 @@ function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewPro
       if (appuntamento) {
         const { disciplina, inizio, durataMinuti, valutazione, note } = result.value
         await repository.updateAppuntamento(appuntamento.id, { disciplina, inizio, durataMinuti, valutazione, note })
+        if (disciplina !== appuntamento.disciplina) await rimuoviSeNonUsata(appuntamento.clienteId, appuntamento.disciplina)
       } else {
         await repository.createAppuntamento(result.value)
       }
+      // A booked fisio session makes the client a fisio client.
+      await aggiungi(result.value.clienteId, result.value.disciplina)
       goBack()
     } catch {
       setSaving(false)

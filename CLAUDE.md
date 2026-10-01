@@ -88,7 +88,7 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - cliente senza telefono (il pulsante WhatsApp deve essere disabilitato)
 - cliente archiviato
 - cliente senza consenso privacy
-- clienti con una, due, tre discipline e senza disciplina
+- clienti con una, due e tre discipline (coerenti con gruppi, appuntamenti e pacchetti)
 - clienti "normali" senza alert
 
 ## 5. Modello dati
@@ -100,7 +100,7 @@ type Cliente = {
   id: string
   nome: string
   cognome: string
-  discipline: Disciplina[]   // zero, una o più (es. fisio + yoga)
+  discipline: Disciplina[]   // zero, una o più; automatiche (vedi regole), o dall'import Excel
   telefono?: string          // salvato in formato E.164, es. +393331234567
   email?: string
   dataNascita?: string       // YYYY-MM-DD
@@ -156,9 +156,9 @@ type Lezione = {
   createdAt: string
 }
 
-type Corso = {               // gruppo che si ripete ogni settimana (yoga, posturale)
+type Corso = {               // gruppo che si ripete ogni settimana: solo yoga o posturale (mai fisio)
   id: string
-  nome: string               // es. "Yoga sera"
+  nome: string               // es. "Yoga sera"; facoltativo nel form: se vuoto "Yoga"/"Posturale"
   disciplina: Disciplina
   giorno: number             // 1 = lunedì … 7 = domenica
   ora: string                // HH:mm
@@ -189,7 +189,8 @@ Regole derivate (funzioni pure in `src/lib/`, con unit test):
 - Se il cliente non ha pacchetti con residue per quella disciplina, "Segna lezione" chiede di creare prima un pacchetto (non si va in negativo).
 - **Le assenze NON scalano le sedute.** Si registrano solo per storico (stato `'assente'`), non toccano le residue né il badge `x/y`. Negli abbonamenti un'assenza non recuperata in settimana fa perdere la settimana.
 - Il calcolo delle residue sta in un'unica funzione (`residue()` in `src/lib/packages.ts`).
-- Vendere un pacchetto di una disciplina che il cliente non ha aggiunge quella disciplina al cliente.
+- **Le discipline del cliente sono automatiche**, non si scelgono a mano: si aggiungono quando il cliente entra in un gruppo (yoga/posturale), gli si fissa un appuntamento (fisio) o gli si vende un pacchetto; si tolgono quando esce dal gruppo, si annulla l'appuntamento o si elimina il pacchetto, se di quella disciplina non resta niente (gruppi, appuntamenti non annullati, pacchetti, lezioni). Regola in `disciplinaInUso()` (`src/lib/discipline.ts`). Quelle importate da Excel restano finché non vengono tolte da una di queste azioni.
+- I corsi di gruppo sono solo di yoga o posturale; la fisio è sempre individuale (appuntamenti).
 - Un pacchetto con lezioni registrate non si può eliminare.
 - Le occorrenze dei corsi non si salvano: si calcolano dal corso (giorno + ora). I presenti di un'occorrenza sono le lezioni con quel `corsoId` in quel giorno.
 - Presenze a un corso: solo dal giorno del corso in poi (non in anticipo). L'occorrenza mostra gli **iscritti fissi** con "Presente"/"Assente" a un tocco e "Tutti presenti" (salta chi non ha un abbonamento valido o è già venuto in un altro gruppo quella settimana; un solo Annulla per tutti, nessun WhatsApp). Chi cambia gruppo si aggiunge da "Da altri gruppi": la lezione conta normalmente. Se la settimana dell'abbonamento è già usata si chiede conferma ("Segna comunque"); se non c'è un abbonamento valido si propone "Nuovo pacchetto".
@@ -237,7 +238,7 @@ Link: `https://wa.me/<numero senza +>?text=<testo url-encoded>`. Funzioni in `sr
 - Azioni distruttive (elimina, archivia) sempre con conferma.
 - Lista clienti: ricerca per nome/cognome, tab colorate per disciplina (Tutti · Fisio · Posturale · Yoga; un cliente con più discipline compare in ogni tab), un badge per disciplina con lo stato del pacchetto in uso (`Fisio 8/10` = fatte/totali, `Yoga al 31 ott` = scadenza), giallo se da rinnovare/in scadenza, rosso se esaurito/scaduto, più "Da pagare".
 - Scheda cliente: sezione Pacchetti con i pacchetti in uso (avanzamento, pallini delle settimane per gli abbonamenti, "Segna pagato"), storico richiudibile, "Nuovo" che parte dal listino.
-- Discipline: ogni disciplina ha un colore (token `fisio-*`, `posturale-*`, `yoga-*` in `tailwind.config`). Si attivano con pulsanti colorati nel form e nel dettaglio cliente.
+- Discipline: ogni disciplina ha un colore (token `fisio-*`, `posturale-*`, `yoga-*` in `tailwind.config`). Nel form cliente non si scelgono: nella scheda compaiono come etichette in sola lettura, aggiornate da gruppo fisso, appuntamenti e pacchetti. La sezione "Gruppi fissi" c'è sempre, anche per un cliente nuovo.
 - Linguaggio semplice, niente termini tecnici. Date in formato italiano (`3 ott`, `03/10/2026`).
 - Palette: riprendere i colori di fisiomade.it. TODO: inserire i codici hex in `tailwind.config` come token `brand-*`. Fino ad allora usa token placeholder neutri, non colori inventati sparsi nel codice.
 - Supporto dark mode non richiesto.

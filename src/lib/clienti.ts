@@ -1,6 +1,5 @@
 import { DISCIPLINE, type Cliente, type Disciplina, type NewCliente } from '../data/types'
 import { toIsoDate } from './dates'
-import { sortDiscipline } from './discipline'
 import { collapseSpaces, normalizeText } from './text'
 import { normalizePhone } from './whatsapp'
 
@@ -36,10 +35,10 @@ export function countByDisciplina(clienti: Cliente[]): Record<FiltroDisciplina, 
 
 // --- Create / edit form ---------------------------------------------------
 
+/** Personal data only: disciplines are set automatically (see disciplinaInUso). */
 export type ClienteForm = {
   nome: string
   cognome: string
-  discipline: Disciplina[]
   telefono: string
   email: string
   dataNascita: string // YYYY-MM-DD from <input type="date">, or ''
@@ -53,12 +52,11 @@ export type ClienteFormErrors = Partial<
 >
 
 /** Cliente fields set by the form. Cleared fields are explicitly undefined so an update clears them. */
-export type ClienteFormValue = Omit<NewCliente, 'archiviato'>
+export type ClienteFormValue = Omit<NewCliente, 'archiviato' | 'discipline'>
 
 export const EMPTY_CLIENTE_FORM: ClienteForm = {
   nome: '',
   cognome: '',
-  discipline: [],
   telefono: '',
   email: '',
   dataNascita: '',
@@ -71,7 +69,6 @@ export function clienteToForm(cliente: Cliente): ClienteForm {
   return {
     nome: cliente.nome,
     cognome: cliente.cognome,
-    discipline: [...cliente.discipline],
     telefono: cliente.telefono ?? '',
     email: cliente.email ?? '',
     dataNascita: cliente.dataNascita ?? '',
@@ -126,7 +123,6 @@ export function validateClienteForm(
     value: {
       nome,
       cognome,
-      discipline: sortDiscipline(form.discipline),
       telefono: telefono ?? undefined,
       email: email || undefined,
       dataNascita: form.dataNascita || undefined,

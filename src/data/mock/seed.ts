@@ -1,5 +1,6 @@
 import { addDays, getISODay, setHours, startOfDay, subDays } from 'date-fns'
 import { dataOra } from '../../lib/agenda'
+import { disciplineInUso, sortDiscipline } from '../../lib/discipline'
 import { toIsoDate } from '../../lib/dates'
 import { scadenzaDopoMesi } from '../../lib/packages'
 import type {
@@ -434,6 +435,12 @@ export function createSeed(now: Date): DemoData {
       valutazione: a.valutazione ?? false,
       stato: a.stato ?? 'programmato',
     })
+  }
+
+  // Disciplines follow what each client does (groups, sessions, packages),
+  // on top of those written by hand as if imported from Excel.
+  for (const cliente of data.clienti) {
+    cliente.discipline = sortDiscipline([...cliente.discipline, ...disciplineInUso(cliente.id, data)])
   }
 
   return data

@@ -83,7 +83,6 @@ describe('validateClienteForm', () => {
         nome: '  Maria  Grazia ',
         telefono: '333 123 4567',
         email: ' maria@example.com ',
-        discipline: ['yoga', 'fisio'],
         note: '  ',
       }),
       TODAY,
@@ -93,7 +92,6 @@ describe('validateClienteForm', () => {
       value: {
         nome: 'Maria Grazia',
         cognome: 'Rossi',
-        discipline: ['fisio', 'yoga'],
         telefono: '+393331234567',
         email: 'maria@example.com',
         dataNascita: undefined,
@@ -139,7 +137,6 @@ describe('validateClienteForm', () => {
     expect(result.ok && result.value).toEqual({
       nome: 'Mario',
       cognome: 'Rossi',
-      discipline: ['posturale'],
       telefono: '+393331234567',
       email: 'mario@example.com',
       dataNascita: '1980-05-20',

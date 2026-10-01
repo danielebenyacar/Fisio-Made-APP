@@ -5,7 +5,6 @@ import { useGoBack } from '../../app/useGoBack'
 import { BackButton } from '../../components/BackButton'
 import { Button } from '../../components/Button'
 import { CheckboxRow } from '../../components/CheckboxRow'
-import { DisciplinaToggle } from '../../components/DisciplinaToggle'
 import { EmptyState } from '../../components/EmptyState'
 import { TextAreaField, TextField } from '../../components/fields'
 import { PageTitle } from '../../components/PageTitle'
@@ -83,7 +82,8 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
         await repository.updateCliente(cliente.id, result.value)
         goBack()
       } else {
-        const created = await repository.createCliente(result.value)
+        // Disciplines come later, from groups, sessions and packages.
+        const created = await repository.createCliente({ ...result.value, discipline: [] })
         navigate(`/clienti/${created.id}`, { replace: true })
       }
     } catch {
@@ -118,18 +118,6 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
           autoCapitalize="words"
           autoComplete="off"
         />
-
-        <div>
-          <p id={fieldId('discipline')} className="mb-1.5 font-semibold">
-            Discipline
-          </p>
-          <DisciplinaToggle
-            value={form.discipline}
-            onChange={(discipline) => set('discipline', discipline)}
-            labelledBy={fieldId('discipline')}
-          />
-          <p className="mt-1.5 text-brand-600">Puoi sceglierne anche più di una.</p>
-        </div>
 
         <TextField
           id={fieldId('telefono')}

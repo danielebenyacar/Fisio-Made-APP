@@ -13,7 +13,19 @@ describe('validateCorsoForm', () => {
 
   it('reports every missing field', () => {
     const result = validateCorsoForm({ ...EMPTY_CORSO_FORM, ora: '9', durataMinuti: '0' })
-    expect(!result.ok && Object.keys(result.errors).sort()).toEqual(['disciplina', 'durataMinuti', 'giorno', 'nome', 'ora'])
+    expect(!result.ok && Object.keys(result.errors).sort()).toEqual(['disciplina', 'durataMinuti', 'giorno', 'ora'])
+  })
+
+  it('names the class after its discipline when the name is empty', () => {
+    const yoga = validateCorsoForm({ ...EMPTY_CORSO_FORM, disciplina: 'yoga', giorno: 2 })
+    expect(yoga.ok && yoga.value.nome).toBe('Yoga')
+    const posturale = validateCorsoForm({ ...EMPTY_CORSO_FORM, nome: '  ', disciplina: 'posturale', giorno: 2 })
+    expect(posturale.ok && posturale.value.nome).toBe('Posturale')
+  })
+
+  it('does not allow fisio groups', () => {
+    const result = validateCorsoForm({ ...EMPTY_CORSO_FORM, disciplina: 'fisio', giorno: 2 })
+    expect(!result.ok && result.errors.disciplina).toBe('I gruppi sono solo di yoga o posturale')
   })
 
   it('round-trips an existing class', () => {

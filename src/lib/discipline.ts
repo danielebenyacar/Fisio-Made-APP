@@ -1,5 +1,15 @@
-import { DISCIPLINE, type Disciplina } from '../data/types'
+import {
+  DISCIPLINE,
+  type Appuntamento,
+  type Corso,
+  type Disciplina,
+  type Lezione,
+  type Pacchetto,
+} from '../data/types'
 import { normalizeText } from './text'
+
+/** Disciplines taught in weekly groups. Fisio is always individual. */
+export const DISCIPLINE_GRUPPO: Disciplina[] = ['posturale', 'yoga']
 
 export const DISCIPLINA_LABEL: Record<Disciplina, string> = {
   fisio: 'Fisio',
@@ -30,4 +40,30 @@ export function toggleDisciplina(values: Disciplina[], disciplina: Disciplina): 
 export function parseDiscipline(text: string): Disciplina[] {
   const normalized = normalizeText(text)
   return DISCIPLINE.filter((d) => normalized.includes(KEYWORDS[d]))
+}
+
+export type AttivitaCliente = {
+  corsi: Corso[]
+  appuntamenti: Appuntamento[]
+  pacchetti: Pacchetto[]
+  lezioni: Lezione[]
+}
+
+/**
+ * Whether a client still does a discipline: enrolled in a group of it, or
+ * with a (not cancelled) appointment, a package or a lesson of it.
+ * Disciplines are set automatically from these, never picked by hand.
+ */
+export function disciplinaInUso(clienteId: string, disciplina: Disciplina, attivita: AttivitaCliente): boolean {
+  return (
+    attivita.corsi.some((c) => c.disciplina === disciplina && c.iscritti.includes(clienteId)) ||
+    attivita.appuntamenti.some((a) => a.clienteId === clienteId && a.disciplina === disciplina && a.stato !== 'annullato') ||
+    attivita.pacchetti.some((p) => p.clienteId === clienteId && p.disciplina === disciplina) ||
+    attivita.lezioni.some((l) => l.clienteId === clienteId && l.disciplina === disciplina)
+  )
+}
+
+/** All disciplines a client does according to groups, appointments, packages and lessons. */
+export function disciplineInUso(clienteId: string, attivita: AttivitaCliente): Disciplina[] {
+  return DISCIPLINE.filter((d) => disciplinaInUso(clienteId, d, attivita))
 }

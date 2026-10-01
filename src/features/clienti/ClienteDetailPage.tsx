@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useRepository } from '../../app/dataSource'
 import { useGoBack } from '../../app/useGoBack'
@@ -6,11 +6,11 @@ import { BackButton } from '../../components/BackButton'
 import { Button } from '../../components/Button'
 import { ButtonLink } from '../../components/ButtonLink'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
-import { DisciplinaToggle } from '../../components/DisciplinaToggle'
+import { DisciplinaPills } from '../../components/DisciplinaPill'
 import { EmptyState } from '../../components/EmptyState'
 import { AlertIcon, CheckIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
-import type { Cliente, Disciplina } from '../../data'
+import type { Cliente } from '../../data'
 import { fullName } from '../../lib/clienti'
 import { ageOn, formatDateIt } from '../../lib/dates'
 import { formatPhone } from '../../lib/whatsapp'
@@ -66,7 +66,6 @@ type DetailProps = {
 
 function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
   const repository = useRepository()
-  const disciplineLabelId = useId()
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [saveError, setSaveError] = useState(false)
 
@@ -82,6 +81,12 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
       setSaveError(true)
       return false
     }
+  }
+
+  /** Disciplines change when groups change: read the client again. */
+  async function refresh() {
+    const fresh = await repository.getCliente(cliente.id)
+    if (fresh) onChange(fresh)
   }
 
   async function archive() {
@@ -104,19 +109,19 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
         </p>
       )}
 
-      <section className="mt-5">
-        <h2 id={disciplineLabelId} className="mb-1.5 font-semibold">
-          Discipline
-        </h2>
-        <DisciplinaToggle
-          value={cliente.discipline}
-          onChange={(discipline: Disciplina[]) => save({ discipline })}
-          labelledBy={disciplineLabelId}
-        />
+      <section className="mt-3" aria-label="Discipline">
+        {cliente.discipline.length > 0 ? (
+          <DisciplinaPills discipline={cliente.discipline} />
+        ) : (
+          <p className="font-semibold text-brand-700">Nessuna disciplina per ora</p>
+        )}
+        <p className="mt-1 text-brand-600">
+          Si aggiornano da sole: gruppo fisso, sedute fisio e pacchetti.
+        </p>
       </section>
 
       {!cliente.archiviato && <ClientePacchetti clienteId={cliente.id} today={today} />}
-      {!cliente.archiviato && <ClienteAgenda clienteId={cliente.id} discipline={cliente.discipline} now={today} />}
+      {!cliente.archiviato && <ClienteAgenda clienteId={cliente.id} now={today} onClienteChange={refresh} />}
 
       <h2 className="mt-6 mb-2 text-xl font-bold">Dati</h2>
       <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">

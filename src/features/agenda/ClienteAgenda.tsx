@@ -10,19 +10,21 @@ import { ChevronRightIcon, PlusIcon } from '../../components/icons'
 import { TONE_STYLE } from '../../components/toneStyles'
 import { Button } from '../../components/Button'
 import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
-import type { Appuntamento, Corso, Disciplina, Lezione } from '../../data'
+import type { Appuntamento, Corso, Lezione } from '../../data'
 import { daSegnare, dataOra, GIORNI, gruppiDelCliente } from '../../lib/agenda'
 import { orario, statoAppuntamentoLabel } from '../../lib/appuntamenti'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 
 type Dati = { appuntamenti: Appuntamento[]; lezioni: Lezione[]; corsi: Corso[] }
 
 const giornoBreve = (date: Date) => format(date, 'EEE d MMM', { locale: it })
 
-type Props = { clienteId: string; discipline: Disciplina[]; now: Date }
+type Props = { clienteId: string; now: Date; onClienteChange: () => void }
 
 /** Client page: fixed groups, upcoming appointments and the history of lessons. */
-export function ClienteAgenda({ clienteId, discipline, now }: Props) {
+export function ClienteAgenda({ clienteId, now, onClienteChange }: Props) {
   const repository = useRepository()
+  const { aggiungi, rimuoviSeNonUsata } = useDisciplineAutomatiche()
   const [dati, setDati] = useState<Dati | null>(null)
   const [tutte, setTutte] = useState(false)
   const [scegliGruppo, setScegliGruppo] = useState(false)
@@ -32,6 +34,10 @@ export function ClienteAgenda({ clienteId, discipline, now }: Props) {
     const updated = await repository.updateCorso(corso.id, { iscritti })
     setDati((d) => d && { ...d, corsi: d.corsi.map((c) => (c.id === updated.id ? updated : c)) })
     setScegliGruppo(false)
+    // Joining a yoga group makes the client a yoga client, and so on.
+    if (iscritto) await aggiungi(clienteId, corso.disciplina)
+    else await rimuoviSeNonUsata(clienteId, corso.disciplina)
+    onClienteChange()
   }
 
   useEffect(() => {
@@ -60,69 +66,66 @@ export function ClienteAgenda({ clienteId, discipline, now }: Props) {
   }
 
   const gruppi = gruppiDelCliente(dati.corsi, clienteId)
-  const gruppiDisponibili = dati.corsi.filter(
-    (c) => c.attivo && !c.iscritti.includes(clienteId) && (discipline.length === 0 || discipline.includes(c.disciplina)),
-  )
-  const mostraGruppi = gruppi.length > 0 || discipline.some((d) => d !== 'fisio')
+  const gruppiDisponibili = dati.corsi.filter((c) => c.attivo && !c.iscritti.includes(clienteId))
 
   return (
     <>
-      {mostraGruppi && (
-        <section className="mt-6">
-          <h2 className="mb-1 text-xl font-bold">Gruppi fissi</h2>
-          <p className="mb-2 text-brand-600">Il gruppo a cui viene di solito. Può cambiarlo quando vuole.</p>
-          {gruppi.length > 0 && (
-            <ul className="mb-3 divide-y divide-brand-200 overflow-hidden rounded-2xl bg-white shadow-sm">
-              {gruppi.map((c) => (
-                <li key={c.id} className="flex min-h-14 flex-wrap items-center gap-2 px-4 py-2">
-                  <span className="flex flex-1 flex-col">
-                    <span className="font-semibold">{c.nome}</span>
-                    <span className="text-brand-600 first-letter:uppercase">
-                      {GIORNI[c.giorno - 1]} · {orario(dataOra('2026-01-05', c.ora), c.durataMinuti)}
-                    </span>
+      <section className="mt-6">
+        <h2 className="mb-1 text-xl font-bold">Gruppi fissi</h2>
+        <p className="mb-2 text-brand-600">
+          Il gruppo di yoga o posturale a cui viene di solito. Può cambiarlo quando vuole.
+        </p>
+        {gruppi.length > 0 && (
+          <ul className="mb-3 divide-y divide-brand-200 overflow-hidden rounded-2xl bg-white shadow-sm">
+            {gruppi.map((c) => (
+              <li key={c.id} className="flex min-h-14 flex-wrap items-center gap-2 px-4 py-2">
+                <span className="flex flex-1 flex-col">
+                  <span className="font-semibold">{c.nome}</span>
+                  <span className="text-brand-600 first-letter:uppercase">
+                    {GIORNI[c.giorno - 1]} · {orario(dataOra('2026-01-05', c.ora), c.durataMinuti)}
                   </span>
-                  <DisciplinaPill disciplina={c.disciplina} />
-                  <button
-                    type="button"
-                    onClick={() => setIscritto(c, false)}
-                    className="min-h-12 rounded-xl px-2 font-semibold text-danger-700 underline"
-                  >
-                    Togli
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {scegliGruppo ? (
-            <div className="flex flex-col gap-2">
-              {gruppiDisponibili.map((c) => (
+                </span>
+                <DisciplinaPill disciplina={c.disciplina} />
                 <button
-                  key={c.id}
                   type="button"
-                  onClick={() => setIscritto(c, true)}
-                  className={`flex min-h-14 items-center gap-3 rounded-2xl border-l-4 bg-white px-4 py-2 text-left shadow-sm active:bg-brand-100 ${DISCIPLINA_STYLE[c.disciplina].accent}`}
+                  onClick={() => setIscritto(c, false)}
+                  className="min-h-12 rounded-xl px-2 font-semibold text-danger-700 underline"
                 >
-                  <span className="flex flex-1 flex-col">
-                    <span className="font-semibold">{c.nome}</span>
-                    <span className="text-brand-600 first-letter:uppercase">
-                      {GIORNI[c.giorno - 1]} · {orario(dataOra('2026-01-05', c.ora), c.durataMinuti)}
-                    </span>
-                  </span>
-                  <PlusIcon className="shrink-0 text-brand-500" />
+                  Togli
                 </button>
-              ))}
-              {gruppiDisponibili.length === 0 && <EmptyState>Nessun altro gruppo disponibile.</EmptyState>}
-              <Button variant="secondary" onClick={() => setScegliGruppo(false)}>
-                Chiudi
-              </Button>
-            </div>
-          ) : (
-            <Button variant="secondary" onClick={() => setScegliGruppo(true)}>
-              {gruppi.length > 0 ? 'Aggiungi o cambia gruppo' : 'Scegli il gruppo'}
+              </li>
+            ))}
+          </ul>
+        )}
+        {scegliGruppo ? (
+          <div className="flex flex-col gap-2">
+            {gruppiDisponibili.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setIscritto(c, true)}
+                className={`flex min-h-14 items-center gap-3 rounded-2xl border-l-4 bg-white px-4 py-2 text-left shadow-sm active:bg-brand-100 ${DISCIPLINA_STYLE[c.disciplina].accent}`}
+              >
+                <span className="flex flex-1 flex-col">
+                  <span className="font-semibold">{c.nome}</span>
+                  <span className="text-brand-600 first-letter:uppercase">
+                    {GIORNI[c.giorno - 1]} · {orario(dataOra('2026-01-05', c.ora), c.durataMinuti)}
+                  </span>
+                </span>
+                <PlusIcon className="shrink-0 text-brand-500" />
+              </button>
+            ))}
+            {gruppiDisponibili.length === 0 && <EmptyState>Nessun altro gruppo disponibile.</EmptyState>}
+            <Button variant="secondary" onClick={() => setScegliGruppo(false)}>
+              Chiudi
             </Button>
-          )}
-        </section>
-      )}
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={() => setScegliGruppo(true)}>
+            {gruppi.length > 0 ? 'Aggiungi o cambia gruppo' : 'Scegli il gruppo'}
+          </Button>
+        )}
+      </section>
 
       <section className="mt-6">
         <div className="mb-2 flex items-center justify-between gap-3">

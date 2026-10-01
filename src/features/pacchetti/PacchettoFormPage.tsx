@@ -20,7 +20,6 @@ import type { Cliente, ModalitaPacchetto, Pacchetto, TipoPacchetto } from '../..
 import { DISCIPLINE } from '../../data'
 import { fullName } from '../../lib/clienti'
 import { toIsoDate } from '../../lib/dates'
-import { sortDiscipline } from '../../lib/discipline'
 import { descriviTipo, MODALITA_LABEL } from '../../lib/listino'
 import {
   conDataInizio,
@@ -34,6 +33,7 @@ import {
 import { descriviAvanzamento, etichettaStato } from '../../lib/pacchettoLabel'
 import { haSuccessivo, statoPacchetto } from '../../lib/packages'
 import { useCliente } from '../clienti/useClienti'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 import { SettimaneBar } from './SettimaneBar'
 import { useListino, usePacchetti } from './usePacchetti'
 
@@ -64,18 +64,15 @@ export function PacchettoFormPage() {
 
 function NuovoPacchetto({ cliente, goBack }: { cliente: Cliente; goBack: () => void }) {
   const repository = useRepository()
+  const { aggiungi } = useDisciplineAutomatiche()
   const { tipi } = useListino()
   const [today] = useState(() => new Date())
   const [form, setForm] = useState<PacchettoForm | null>(null)
 
   async function save(value: PacchettoFormValue) {
     await repository.createPacchetto({ ...value, clienteId: cliente.id })
-    // Selling a package of a discipline the client wasn't tagged with adds the tag.
-    if (!cliente.discipline.includes(value.disciplina)) {
-      await repository.updateCliente(cliente.id, {
-        discipline: sortDiscipline([...cliente.discipline, value.disciplina]),
-      })
-    }
+    // Selling a package of a discipline makes the client do that discipline.
+    await aggiungi(cliente.id, value.disciplina)
     goBack()
   }
 
@@ -205,6 +202,7 @@ function ModificaPacchettoForm({
   goBack: () => void
 }) {
   const repository = useRepository()
+  const { rimuoviSeNonUsata } = useDisciplineAutomatiche()
   const [form, setForm] = useState(() => pacchettoToForm(pacchetto))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteError, setDeleteError] = useState(false)
@@ -219,6 +217,7 @@ function ModificaPacchettoForm({
     setConfirmDelete(false)
     try {
       await repository.deletePacchetto(pacchetto.id)
+      await rimuoviSeNonUsata(cliente.id, pacchetto.disciplina)
       goBack()
     } catch {
       setDeleteError(true)

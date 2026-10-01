@@ -7,13 +7,19 @@ type Props = {
   value: Disciplina | ''
   onChange: (value: Disciplina) => void
   labelledBy?: string
+  /** Which disciplines can be chosen (default: all). */
+  options?: readonly Disciplina[]
 }
 
 /** Exactly one discipline, as colored buttons. */
-export function DisciplinaPicker({ value, onChange, labelledBy }: Props) {
+export function DisciplinaPicker({ value, onChange, labelledBy, options = DISCIPLINE }: Props) {
   return (
-    <div role="radiogroup" aria-labelledby={labelledBy} className="grid grid-cols-3 gap-2">
-      {DISCIPLINE.map((d) => {
+    <div
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      className={`grid gap-2 ${options.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}
+    >
+      {options.map((d) => {
         const on = value === d
         return (
           <button

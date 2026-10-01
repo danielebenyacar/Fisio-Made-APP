@@ -1,4 +1,5 @@
 import type { Corso, Disciplina, NewCorso } from '../data/types'
+import { DISCIPLINA_LABEL, DISCIPLINE_GRUPPO } from './discipline'
 import { parseIntIn } from './listino'
 import { collapseSpaces } from './text'
 
@@ -11,7 +12,7 @@ export type CorsoForm = {
   attivo: boolean
 }
 
-export type CorsoFormErrors = Partial<Record<'nome' | 'disciplina' | 'giorno' | 'ora' | 'durataMinuti', string>>
+export type CorsoFormErrors = Partial<Record<'disciplina' | 'giorno' | 'ora' | 'durataMinuti', string>>
 
 export const EMPTY_CORSO_FORM: CorsoForm = {
   nome: '',
@@ -40,9 +41,10 @@ export function validateCorsoForm(
   form: CorsoForm,
 ): { ok: true; value: CorsoFormValue } | { ok: false; errors: CorsoFormErrors } {
   const errors: CorsoFormErrors = {}
-  const nome = collapseSpaces(form.nome)
-  if (!nome) errors.nome = 'Inserisci il nome'
   if (!form.disciplina) errors.disciplina = 'Scegli la disciplina'
+  else if (!DISCIPLINE_GRUPPO.includes(form.disciplina)) errors.disciplina = 'I gruppi sono solo di yoga o posturale'
+  // The name is optional: by default the class is called like its discipline.
+  const nome = collapseSpaces(form.nome) || (form.disciplina ? DISCIPLINA_LABEL[form.disciplina] : '')
   if (form.giorno < 1 || form.giorno > 7) errors.giorno = 'Scegli il giorno'
   if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(form.ora)) errors.ora = 'Orario non valido'
   const durata = parseIntIn(form.durataMinuti, 15, 240)
