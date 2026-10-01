@@ -195,6 +195,22 @@ describe('MockRepository', () => {
     await expect(repo.updateAppuntamento('missing', {})).rejects.toThrow('non trovato')
   })
 
+  it('svuota() empties everything but the price list, and survives a reload', async () => {
+    const repo = make()
+    const listino = await repo.listTipiPacchetto()
+    await repo.svuota()
+    for (const repoNow of [repo, make()]) {
+      expect(await repoNow.listClienti()).toEqual([])
+      expect(await repoNow.listPacchetti()).toEqual([])
+      expect(await repoNow.listLezioni()).toEqual([])
+      expect(await repoNow.listCorsi()).toEqual([])
+      expect(await repoNow.listAppuntamenti()).toEqual([])
+      expect(await repoNow.listTipiPacchetto()).toEqual(listino)
+    }
+    await repo.reset()
+    expect((await repo.listClienti()).length).toBeGreaterThan(10)
+  })
+
   it('reset() discards changes and restores the demo data', async () => {
     const repo = make()
     const before = await repo.listClienti()

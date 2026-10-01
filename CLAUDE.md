@@ -36,7 +36,7 @@ Lo sviluppatore lavora **solo da iPad**: nessun ambiente locale. Tutto passa da 
 
 L'app ha un livello dati astratto con due implementazioni, scelte da `VITE_DATA_MODE`:
 
-- `mock`: dati finti in memoria, persistiti in `localStorage` (chiave `fisiomade-demo`). Nessuna chiamata di rete. Banner fisso in alto **"DEMO — dati di prova"**. In "Altro" c'è il pulsante **"Reimposta dati demo"**.
+- `mock`: dati finti in memoria, persistiti in `localStorage` (chiave `fisiomade-demo`). Nessuna chiamata di rete. Banner fisso in alto **"DEMO — dati di prova"**. In "Altro" ci sono i pulsanti **"Reimposta dati demo"** (torna ai dati di prova) e **"Inizia da zero"** (demo vuota: nessun cliente, pacchetto, lezione, corso o appuntamento; resta solo il listino di esempio), entrambi con conferma.
 - `supabase`: dati reali, login obbligatorio.
 
 Regole:

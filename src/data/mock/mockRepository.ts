@@ -55,6 +55,19 @@ export class MockRepository implements Repository {
   }
 
   /** Throws away every change and goes back to fresh demo data. */
+  /** Empty demo: no clients, packages, lessons, classes or appointments. Keeps the price list. */
+  async svuota(): Promise<void> {
+    this.data = {
+      ...createSeed(this.options.now()),
+      clienti: [],
+      pacchetti: [],
+      lezioni: [],
+      corsi: [],
+      appuntamenti: [],
+    }
+    this.save()
+  }
+
   async reset(): Promise<void> {
     this.data = createSeed(this.options.now())
     this.save()

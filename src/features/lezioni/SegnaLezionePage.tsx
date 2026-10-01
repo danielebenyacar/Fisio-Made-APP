@@ -5,6 +5,7 @@ import { Button } from '../../components/Button'
 import { ButtonLink } from '../../components/ButtonLink'
 import { ClientePicker } from '../../components/ClientePicker'
 import { DisciplinaPill, DisciplinaPills } from '../../components/DisciplinaPill'
+import { EmptyState } from '../../components/EmptyState'
 import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
 import { PageTitle } from '../../components/PageTitle'
 import { TONE_STYLE } from '../../components/toneStyles'
@@ -39,7 +40,14 @@ export function SegnaLezionePage() {
     <>
       <PageTitle>Segna lezione</PageTitle>
       <div className="mt-4">
-        {!dati ? null : cliente ? (
+        {!dati ? null : !dati.clienti.some((c) => !c.archiviato) ? (
+          <EmptyState>
+            <p>Non ci sono ancora clienti.</p>
+            <div className="mt-4">
+              <ButtonLink to="/clienti/nuovo">Nuovo cliente</ButtonLink>
+            </div>
+          </EmptyState>
+        ) : cliente ? (
           <Conferma
             key={`${cliente.id}-${version}`}
             cliente={cliente}

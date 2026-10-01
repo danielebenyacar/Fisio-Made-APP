@@ -10,10 +10,10 @@ import type { DataSource } from '../../data'
 type MockSource = Extract<DataSource, { mode: 'mock' }>
 
 function DemoDataCard({ source }: { source: MockSource }) {
-  const { repository, resetDemoData } = source
+  const { repository, resetDemoData, svuotaDemoData } = source
   const [activeCount, setActiveCount] = useState<number | null>(null)
-  const [confirming, setConfirming] = useState(false)
-  const [resetDone, setResetDone] = useState(false)
+  const [confirming, setConfirming] = useState<'reset' | 'svuota' | null>(null)
+  const [done, setDone] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
@@ -26,11 +26,13 @@ function DemoDataCard({ source }: { source: MockSource }) {
     }
   }, [repository, version])
 
-  async function handleReset() {
-    setConfirming(false)
-    await resetDemoData()
+  async function handleConfirm() {
+    const action = confirming
+    setConfirming(null)
+    if (action === 'reset') await resetDemoData()
+    if (action === 'svuota') await svuotaDemoData()
     setVersion((v) => v + 1)
-    setResetDone(true)
+    setDone(action === 'reset' ? '✓ Dati demo reimpostati' : '✓ Demo vuota: puoi partire da zero')
   }
 
   return (
@@ -38,26 +40,37 @@ function DemoDataCard({ source }: { source: MockSource }) {
       <h2 className="text-xl font-bold">Dati di prova</h2>
       <p className="mt-2 text-brand-700">
         Stai usando la versione dimostrativa
-        {activeCount !== null && <> con {activeCount} clienti finti</>}. Puoi modificare tutto
-        liberamente: le modifiche restano salvate solo su questo telefono.
+        {activeCount === 0 ? ', per ora vuota' : activeCount !== null && <> con {activeCount} clienti</>}. Puoi
+        modificare tutto liberamente: le modifiche restano salvate solo su questo telefono.
       </p>
-      <div className="mt-5">
-        <Button variant="secondary" onClick={() => setConfirming(true)}>
+      <div className="mt-5 flex flex-col gap-3">
+        <Button variant="secondary" onClick={() => setConfirming('svuota')}>
+          Inizia da zero
+        </Button>
+        <Button variant="secondary" onClick={() => setConfirming('reset')}>
           Reimposta dati demo
         </Button>
       </div>
-      {resetDone && (
+      {done && (
         <p role="status" className="mt-3 text-center font-semibold text-brand-800">
-          ✓ Dati demo reimpostati
+          {done}
         </p>
       )}
       <ConfirmSheet
-        open={confirming}
+        open={confirming === 'reset'}
         title="Reimpostare i dati demo?"
-        message="Tutte le modifiche fatte verranno cancellate e torneranno i clienti di prova iniziali."
+        message="Tutte le modifiche fatte verranno cancellate e torneranno i clienti e i corsi di prova iniziali."
         confirmLabel="Reimposta"
-        onConfirm={handleReset}
-        onCancel={() => setConfirming(false)}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirming(null)}
+      />
+      <ConfirmSheet
+        open={confirming === 'svuota'}
+        title="Partire da zero?"
+        message="Spariscono tutti i clienti, i pacchetti, le lezioni, i corsi e gli appuntamenti. Resta solo il listino con i prezzi di esempio. Potrai sempre tornare ai dati di prova con “Reimposta dati demo”."
+        confirmLabel="Inizia da zero"
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirming(null)}
       />
     </section>
   )

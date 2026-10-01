@@ -8,7 +8,14 @@ export { DISCIPLINE } from './types'
 export type DataMode = 'mock' | 'supabase'
 
 export type DataSource =
-  | { mode: 'mock'; repository: Repository; resetDemoData: () => Promise<void> }
+  | {
+      mode: 'mock'
+      repository: Repository
+      /** Back to the demo clients and classes. */
+      resetDemoData: () => Promise<void>
+      /** Start from an empty demo (only the example price list). */
+      svuotaDemoData: () => Promise<void>
+    }
   | { mode: 'supabase'; repository: Repository }
 
 export class DataModeError extends Error {}
@@ -46,5 +53,10 @@ export function createDataSource(mode: DataMode): DataSource {
     now: () => new Date(),
     newId: () => crypto.randomUUID(),
   })
-  return { mode: 'mock', repository, resetDemoData: () => repository.reset() }
+  return {
+    mode: 'mock',
+    repository,
+    resetDemoData: () => repository.reset(),
+    svuotaDemoData: () => repository.svuota(),
+  }
 }
