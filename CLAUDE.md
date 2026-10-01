@@ -80,15 +80,20 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - cliente con un'assenza registrata (verifica che non scali le residue)
 - cliente senza telefono (il pulsante WhatsApp deve essere disabilitato)
 - cliente archiviato
+- cliente senza consenso privacy
+- clienti con una, due, tre discipline e senza disciplina
 - clienti "normali" senza alert
 
 ## 5. Modello dati
 
 ```ts
+type Disciplina = 'fisio' | 'posturale' | 'yoga'
+
 type Cliente = {
   id: string
   nome: string
   cognome: string
+  discipline: Disciplina[]   // zero, una o più (es. fisio + yoga)
   telefono?: string          // salvato in formato E.164, es. +393331234567
   email?: string
   dataNascita?: string       // YYYY-MM-DD
@@ -166,7 +171,8 @@ Link: `https://wa.me/<numero senza +>?text=<testo url-encoded>`. Funzioni in `sr
 - Azioni frequenti in massimo 2 tap. "Segna lezione": scegli cliente (con ricerca) → conferma.
 - Dopo "Segna lezione": toast con **"Annulla"** per 5 secondi, poi proposta di inviare il WhatsApp di riepilogo.
 - Azioni distruttive (elimina, archivia) sempre con conferma.
-- Lista clienti: ricerca per nome/cognome, badge lezioni tipo `8/10`, badge colorato se c'è un alert.
+- Lista clienti: ricerca per nome/cognome, tab colorate per disciplina (Tutti · Fisio · Posturale · Yoga; un cliente con più discipline compare in ogni tab), badge lezioni tipo `8/10`, badge colorato se c'è un alert.
+- Discipline: ogni disciplina ha un colore (token `fisio-*`, `posturale-*`, `yoga-*` in `tailwind.config`). Si attivano con pulsanti colorati nel form e nel dettaglio cliente.
 - Linguaggio semplice, niente termini tecnici. Date in formato italiano (`3 ott`, `03/10/2026`).
 - Palette: riprendere i colori di fisiomade.it. TODO: inserire i codici hex in `tailwind.config` come token `brand-*`. Fino ad allora usa token placeholder neutri, non colori inventati sparsi nel codice.
 - Supporto dark mode non richiesto.
@@ -199,7 +205,7 @@ netlify.toml
 Si costruisce a moduli per poter mostrare alla titolare l'avanzamento passo per passo. Fai solo il modulo richiesto.
 
 - **M0 — Setup**: progetto Vite/React/TS/Tailwind, lint, Vitest, `netlify.toml`, layout con bottom nav (schermate vuote), livello dati con interfaccia + mock repository + seed, banner DEMO, "Reimposta dati demo".
-- **M1 — Clienti**: lista con ricerca, dettaglio cliente, crea/modifica/archivia, campo consenso privacy.
+- **M1 — Clienti**: lista con ricerca e tab per disciplina, dettaglio cliente, crea/modifica/archivia, campo consenso privacy, discipline colorate, import clienti da Excel (vedi §12).
 - **M2 — Pacchetti**: crea pacchetto dal dettaglio cliente, segna pagato, calcolo residue, badge `x/y`, storico pacchetti.
 - **M3 — Segna lezione**: flusso dal "+", regola FIFO, toast Annulla, WhatsApp di riepilogo, storico lezioni nel dettaglio cliente. Nel dettaglio cliente pulsante secondario "Segna assenza" (non scala, compare nello storico con etichetta "Assenza"). Il flusso principale del "+" registra solo lezioni fatte.
 - **M4 — Oggi**: alert con priorità e pulsanti d'azione, auguri WhatsApp.
@@ -214,3 +220,10 @@ Fase 2 (non ora): schede di valutazione con export PDF, messaggi di auguri semi-
 - RLS attiva su tutte le tabelle, nessuna tabella accessibile senza login. Registrazioni pubbliche disabilitate.
 - Nessun analytics o tracker di terze parti.
 - Nessun log in console di dati dei clienti.
+
+## 12. Import clienti da Excel
+
+- Dentro l'app: Altro → "Importa da Excel" (anche dal fondo della lista Clienti). Il file reale resta sul telefono: non passa mai dal repo né da Claude.
+- Formato `.xlsx`, primo foglio. La prima riga contiene i titoli delle colonne; obbligatorie **Nome** e **Cognome**, facoltative Telefono, Email, Data di nascita, Discipline, Note, Consenso privacy (sono riconosciuti anche sinonimi, es. Cellulare, Attività, Nato il).
+- Prima di salvare c'è sempre un'anteprima: clienti da importare (con avvisi sui valori scartati), già presenti (stesso nome e cognome, saltati), righe non importabili.
+- Logica in `src/lib/importClienti.ts` (funzione pura, con test). File di esempio con dati finti: `public/esempio-clienti.xlsx`, scaricabile dalla schermata di import.
