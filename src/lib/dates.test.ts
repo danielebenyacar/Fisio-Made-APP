@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ageOn,
   formatDateIt,
+  formatDateShort,
   formatDayHeading,
   isoDateFromParts,
   parseDateText,
@@ -25,6 +26,13 @@ describe('formatDayHeading', () => {
 describe('formatDateIt', () => {
   it('formats as dd/mm/yyyy', () => {
     expect(formatDateIt('1985-10-03')).toBe('03/10/1985')
+  })
+})
+
+describe('formatDateShort', () => {
+  it('formats as day and short Italian month', () => {
+    expect(formatDateShort('2026-10-03')).toBe('3 ott')
+    expect(formatDateShort('2027-01-31')).toBe('31 gen')
   })
 })
 

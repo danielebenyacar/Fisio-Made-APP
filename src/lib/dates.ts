@@ -17,6 +17,12 @@ export function formatDateIt(isoDate: string): string {
   return `${day}/${month}/${year}`
 }
 
+/** "2026-10-03" → "3 ott". */
+export function formatDateShort(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  return format(new Date(year, month - 1, day), 'd MMM', { locale: it })
+}
+
 /** YYYY-MM-DD from numbers, or null if the day does not exist (e.g. 31/02). */
 export function isoDateFromParts(year: number, month: number, day: number): string | null {
   const date = new Date(year, month - 1, day)

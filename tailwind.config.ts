@@ -14,6 +14,7 @@ export default {
           text: colors.amber[950],
         },
         danger: colors.red,
+        warning: colors.amber,
         // One color per discipline (client tags and list tabs).
         fisio: colors.sky,
         posturale: colors.emerald,

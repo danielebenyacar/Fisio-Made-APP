@@ -6,13 +6,18 @@ import type {
   NewCliente,
   NewLezione,
   NewPacchetto,
+  NewTipoPacchetto,
   Pacchetto,
   PacchettoPatch,
+  TipoPacchetto,
+  TipoPacchettoPatch,
 } from '../types'
+import { DISCIPLINE } from '../types'
+import { ordinaPacchetti } from '../../lib/packages'
 import { createSeed, type DemoData } from './seed'
 
 export const STORAGE_KEY = 'fisiomade-demo'
-const STORAGE_VERSION = 2 // bump when the data shape changes: old demo data is reseeded
+const STORAGE_VERSION = 3 // bump when the data shape changes: old demo data is reseeded
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -81,12 +86,45 @@ export class MockRepository implements Repository {
     return copy(cliente)
   }
 
-  async listPacchetti(filter?: ByCliente): Promise<Pacchetto[]> {
-    const sorted = byCliente(this.data.pacchetti, filter).sort(
-      (a, b) =>
-        a.dataAcquisto.localeCompare(b.dataAcquisto) || a.createdAt.localeCompare(b.createdAt),
+  async listTipiPacchetto(): Promise<TipoPacchetto[]> {
+    const order = (t: TipoPacchetto) => DISCIPLINE.indexOf(t.disciplina)
+    const sorted = [...this.data.tipiPacchetto].sort(
+      (a, b) => order(a) - order(b) || a.nome.localeCompare(b.nome, 'it'),
     )
     return copy(sorted)
+  }
+
+  async getTipoPacchetto(id: string): Promise<TipoPacchetto | null> {
+    const tipo = this.data.tipiPacchetto.find((t) => t.id === id)
+    return tipo ? copy(tipo) : null
+  }
+
+  async createTipoPacchetto(input: NewTipoPacchetto): Promise<TipoPacchetto> {
+    const tipo: TipoPacchetto = {
+      ...input,
+      id: this.options.newId(),
+      createdAt: this.options.now().toISOString(),
+    }
+    this.data.tipiPacchetto.push(tipo)
+    this.save()
+    return copy(tipo)
+  }
+
+  async updateTipoPacchetto(id: string, patch: TipoPacchettoPatch): Promise<TipoPacchetto> {
+    const tipo = this.data.tipiPacchetto.find((t) => t.id === id)
+    if (!tipo) throw new Error('Tipo di pacchetto non trovato')
+    Object.assign(tipo, patch)
+    this.save()
+    return copy(tipo)
+  }
+
+  async listPacchetti(filter?: ByCliente): Promise<Pacchetto[]> {
+    return copy(ordinaPacchetti(byCliente(this.data.pacchetti, filter)))
+  }
+
+  async getPacchetto(id: string): Promise<Pacchetto | null> {
+    const pacchetto = this.data.pacchetti.find((p) => p.id === id)
+    return pacchetto ? copy(pacchetto) : null
   }
 
   async createPacchetto(input: NewPacchetto): Promise<Pacchetto> {
@@ -108,6 +146,15 @@ export class MockRepository implements Repository {
     return copy(pacchetto)
   }
 
+  async deletePacchetto(id: string): Promise<void> {
+    this.findPacchetto(id)
+    if (this.data.lezioni.some((l) => l.pacchettoId === id)) {
+      throw new Error('Il pacchetto ha delle lezioni registrate')
+    }
+    this.data.pacchetti = this.data.pacchetti.filter((p) => p.id !== id)
+    this.save()
+  }
+
   async listLezioni(filter?: ByCliente): Promise<Lezione[]> {
     const sorted = byCliente(this.data.lezioni, filter).sort((a, b) =>
       a.data.localeCompare(b.data),
@@ -119,6 +166,9 @@ export class MockRepository implements Repository {
     const pacchetto = this.findPacchetto(input.pacchettoId)
     if (pacchetto.clienteId !== input.clienteId) {
       throw new Error('Il pacchetto appartiene a un altro cliente')
+    }
+    if (pacchetto.disciplina !== input.disciplina) {
+      throw new Error('La lezione è di una disciplina diversa dal pacchetto')
     }
     const lezione: Lezione = {
       ...input,
@@ -158,12 +208,18 @@ export class MockRepository implements Repository {
       if (
         stored.version !== STORAGE_VERSION ||
         !Array.isArray(stored.clienti) ||
+        !Array.isArray(stored.tipiPacchetto) ||
         !Array.isArray(stored.pacchetti) ||
         !Array.isArray(stored.lezioni)
       ) {
         return null
       }
-      return { clienti: stored.clienti, pacchetti: stored.pacchetti, lezioni: stored.lezioni }
+      return {
+        clienti: stored.clienti,
+        tipiPacchetto: stored.tipiPacchetto,
+        pacchetti: stored.pacchetti,
+        lezioni: stored.lezioni,
+      }
     } catch {
       return null
     }

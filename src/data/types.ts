@@ -16,10 +16,37 @@ export type Cliente = {
   createdAt: string
 }
 
+/**
+ * - 'sedute': N sessions bought in advance (fisio). Optional expiry.
+ * - 'abbonamento': valid from dataInizio to scadenza, with the right to one
+ *   lesson per week (Monday–Sunday). A week without a lesson is lost.
+ */
+export type ModalitaPacchetto = 'sedute' | 'abbonamento'
+
+/** An entry of the price list ("listino"), editable by the owner. */
+export type TipoPacchetto = {
+  id: string
+  nome: string
+  disciplina: Disciplina
+  modalita: ModalitaPacchetto
+  lezioni?: number // 'sedute' only
+  durataMesi?: number // 'abbonamento': length (required); 'sedute': optional validity
+  prezzo?: number // euro
+  attivo: boolean // inactive types are hidden when selling, history is kept
+  createdAt: string
+}
+
+/** A package or subscription bought by a client. Copies its type's data at purchase time. */
 export type Pacchetto = {
   id: string
   clienteId: string
-  lezioniTotali: number
+  tipoId?: string
+  nome: string
+  disciplina: Disciplina
+  modalita: ModalitaPacchetto
+  lezioniTotali?: number // 'sedute' only
+  dataInizio: string // YYYY-MM-DD
+  scadenza?: string // YYYY-MM-DD, last valid day. Required for 'abbonamento'
   prezzo?: number // euro
   pagato: boolean
   dataPagamento?: string // YYYY-MM-DD
@@ -34,6 +61,7 @@ export type Lezione = {
   id: string
   pacchettoId: string
   clienteId: string
+  disciplina: Disciplina
   data: string // ISO datetime
   stato: LezioneStato
   note?: string
@@ -44,6 +72,9 @@ export type NewCliente = Omit<Cliente, 'id' | 'createdAt' | 'archiviato'> & {
   archiviato?: boolean
 }
 export type ClientePatch = Partial<Omit<Cliente, 'id' | 'createdAt'>>
+
+export type NewTipoPacchetto = Omit<TipoPacchetto, 'id' | 'createdAt'>
+export type TipoPacchettoPatch = Partial<NewTipoPacchetto>
 
 export type NewPacchetto = Omit<Pacchetto, 'id' | 'createdAt'>
 export type PacchettoPatch = Partial<Omit<Pacchetto, 'id' | 'createdAt' | 'clienteId'>>

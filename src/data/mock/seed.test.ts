@@ -1,19 +1,13 @@
 import { addDays, format, isValid, parseISO } from 'date-fns'
 import { describe, expect, it } from 'vitest'
-import type { Cliente, Pacchetto } from '../types'
+import { toIsoDate } from '../../lib/dates'
+import { pacchettiInEvidenza, settimaneAbbonamento, statoPacchetto } from '../../lib/packages'
+import type { Cliente } from '../types'
 import { createSeed, type DemoData } from './seed'
 
-// Fixture-only helpers: the real residue rule lives in src/lib/packages.ts (M2).
-const fatte = (data: DemoData, p: Pacchetto) =>
-  data.lezioni.filter((l) => l.pacchettoId === p.id && l.stato === 'fatta').length
-const pacchettiOf = (data: DemoData, c: Cliente) =>
-  data.pacchetti.filter((p) => p.clienteId === c.id)
-const latest = (data: DemoData, c: Cliente) => pacchettiOf(data, c).at(-1)!
-const residueOfLatest = (data: DemoData, c: Cliente) => {
-  const p = latest(data, c)
-  return p.lezioniTotali - fatte(data, p)
-}
 const byName = (data: DemoData, nome: string) => data.clienti.find((c) => c.nome === nome)!
+const pacchettiOf = (data: DemoData, c: Cliente) => data.pacchetti.filter((p) => p.clienteId === c.id)
+const lezioniOf = (data: DemoData, c: Cliente) => data.lezioni.filter((l) => l.clienteId === c.id)
 
 const DATES = [
   new Date(2026, 9, 1, 8, 30), // a regular day
@@ -42,9 +36,24 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     }
   })
 
-  it('never uses more lessons than a package has, nor dates in the future', () => {
-    for (const p of data.pacchetti) expect(fatte(data, p)).toBeLessThanOrEqual(p.lezioniTotali)
-    for (const l of data.lezioni) expect(parseISO(l.data).getTime()).toBeLessThan(now.getTime())
+  it('keeps lessons inside their package: count, validity, one per week, discipline', () => {
+    for (const p of data.pacchetti) {
+      const own = data.lezioni.filter((l) => l.pacchettoId === p.id)
+      for (const l of own) {
+        expect(l.disciplina).toBe(p.disciplina)
+        expect(toIsoDate(parseISO(l.data)) >= p.dataInizio).toBe(true)
+        expect(parseISO(l.data).getTime()).toBeLessThan(now.getTime())
+      }
+      const fatte = own.filter((l) => l.stato === 'fatta')
+      if (p.modalita === 'sedute') {
+        expect(fatte.length).toBeLessThanOrEqual(p.lezioniTotali!)
+      } else {
+        expect(p.scadenza).toBeDefined()
+        for (const l of fatte) expect(toIsoDate(parseISO(l.data)) <= p.scadenza!).toBe(true)
+        const weeksDone = settimaneAbbonamento(p, data.lezioni, now).filter((w) => w.stato === 'fatta')
+        expect(weeksDone).toHaveLength(fatte.length) // never two lessons in the same week
+      }
+    }
   })
 
   it('uses valid dates and E.164 phone numbers', () => {
@@ -52,32 +61,54 @@ describe.each(DATES)('createSeed(%s)', (now) => {
       if (c.dataNascita) expect(isValid(parseISO(c.dataNascita))).toBe(true)
       if (c.telefono) expect(c.telefono).toMatch(/^\+39300\d{7}$/)
     }
+    for (const p of data.pacchetti) {
+      for (const d of [p.dataInizio, p.dataAcquisto, p.scadenza]) if (d) expect(isValid(parseISO(d))).toBe(true)
+    }
+  })
+
+  it('links every package to an entry of the price list', () => {
+    const tipi = new Map(data.tipiPacchetto.map((t) => [t.id, t]))
+    for (const p of data.pacchetti) expect(tipi.get(p.tipoId!)?.disciplina).toBe(p.disciplina)
+    for (const d of ['fisio', 'posturale', 'yoga'] as const) {
+      expect(data.tipiPacchetto.some((t) => t.disciplina === d && t.attivo)).toBe(true)
+    }
+    expect(data.tipiPacchetto.some((t) => !t.attivo)).toBe(true)
   })
 
   it('covers the package scenarios', () => {
-    expect(residueOfLatest(data, byName(data, 'Giulia'))).toBe(0)
-    expect(residueOfLatest(data, byName(data, 'Marco'))).toBe(1)
-    expect(residueOfLatest(data, byName(data, 'Francesca'))).toBe(2)
-    expect(data.pacchetti.some((p) => !p.pagato)).toBe(true)
+    const inEvidenza = (nome: string) => {
+      const c = byName(data, nome)
+      return pacchettiInEvidenza(pacchettiOf(data, c), lezioniOf(data, c), now)
+    }
+    expect(inEvidenza('Giulia').get('fisio')?.stato).toMatchObject({ residue: 0, esaurito: true })
+    expect(inEvidenza('Marco').get('fisio')?.stato).toMatchObject({ residue: 1, daRinnovare: true })
+    expect(inEvidenza('Francesca').get('fisio')?.stato).toMatchObject({ residue: 2, daRinnovare: true })
+    expect(inEvidenza('Francesca').get('yoga')?.stato).toMatchObject({ attivo: true, inScadenza: false })
+    expect(inEvidenza('Alessandro').get('posturale')?.stato).toMatchObject({ attivo: true, inScadenza: true })
+    expect(inEvidenza('Simone').get('posturale')?.stato).toMatchObject({ scaduto: true })
+    expect(data.pacchetti.filter((p) => !p.pagato).map((p) => byName(data, 'Luca').id === p.clienteId)).toEqual([true])
+    expect(pacchettiOf(data, byName(data, 'Paolo'))).toEqual([])
 
+    // Matteo: the old package (2 left) is still the one in use, a newer one is waiting.
     const matteo = pacchettiOf(data, byName(data, 'Matteo'))
     expect(matteo).toHaveLength(2)
-    expect(matteo[0].lezioniTotali - fatte(data, matteo[0])).toBeGreaterThan(0)
-    expect(matteo[1].dataAcquisto > matteo[0].dataAcquisto).toBe(true)
+    expect(inEvidenza('Matteo').get('fisio')).toMatchObject({ pacchetto: { id: matteo[0].id }, stato: { residue: 2 } })
   })
 
   it('has a client absent for more than 14 days with lessons left', () => {
     const chiara = byName(data, 'Chiara')
-    const last = data.lezioni.filter((l) => l.clienteId === chiara.id).at(-1)!
-    expect(residueOfLatest(data, chiara)).toBeGreaterThan(0)
+    const last = lezioniOf(data, chiara).at(-1)!
+    const [p] = pacchettiOf(data, chiara)
+    expect(statoPacchetto(p, data.lezioni, now).residue).toBeGreaterThan(0)
     expect(parseISO(last.data).getTime()).toBeLessThan(addDays(now, -14).getTime())
+    expect(settimaneAbbonamento(p, data.lezioni, now).some((w) => w.stato === 'persa')).toBe(true)
   })
 
   it('has an absence that does not count as a lesson done', () => {
     const valentina = byName(data, 'Valentina')
-    const lezioni = data.lezioni.filter((l) => l.clienteId === valentina.id)
-    expect(lezioni.filter((l) => l.stato === 'assente')).toHaveLength(1)
-    expect(residueOfLatest(data, valentina)).toBe(7)
+    expect(lezioniOf(data, valentina).filter((l) => l.stato === 'assente')).toHaveLength(1)
+    const [p] = pacchettiOf(data, valentina)
+    expect(statoPacchetto(p, data.lezioni, now).residue).toBe(7)
   })
 
   it('has birthdays today, in 2, 3 and 5 days', () => {

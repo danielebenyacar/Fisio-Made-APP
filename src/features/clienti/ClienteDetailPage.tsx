@@ -14,6 +14,7 @@ import type { Cliente, Disciplina } from '../../data'
 import { fullName } from '../../lib/clienti'
 import { ageOn, formatDateIt } from '../../lib/dates'
 import { formatPhone } from '../../lib/whatsapp'
+import { ClientePacchetti } from '../pacchetti/ClientePacchetti'
 import { useCliente } from './useClienti'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -113,7 +114,10 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
         />
       </section>
 
-      <dl className="mt-5 divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">
+      {!cliente.archiviato && <ClientePacchetti clienteId={cliente.id} today={today} />}
+
+      <h2 className="mt-6 mb-2 text-xl font-bold">Dati</h2>
+      <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">
         <Row label="Telefono">
           {cliente.telefono ? (
             <a href={`tel:${cliente.telefono}`} className="text-brand-900 underline">

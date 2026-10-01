@@ -70,6 +70,17 @@ export function AltroPage() {
       <PageTitle>Altro</PageTitle>
       <div className="mt-6 flex flex-col gap-4">
         <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Listino</h2>
+          <p className="mt-2 text-brand-700">
+            Pacchetti di sedute e abbonamenti che vendi, con durata e prezzo.
+          </p>
+          <div className="mt-5">
+            <ButtonLink to="/altro/listino" variant="secondary">
+              Apri il listino
+            </ButtonLink>
+          </div>
+        </section>
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold">Importa clienti</h2>
           <p className="mt-2 text-brand-700">
             Aggiungi in un colpo solo i clienti che hai già in un file Excel.

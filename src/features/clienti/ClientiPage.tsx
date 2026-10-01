@@ -1,6 +1,6 @@
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ButtonLink } from '../../components/ButtonLink'
-import { DisciplinaPills } from '../../components/DisciplinaPill'
 import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
 import { EmptyState } from '../../components/EmptyState'
 import { ChevronRightIcon, PlusIcon, SearchIcon, UploadIcon } from '../../components/icons'
@@ -13,6 +13,9 @@ import {
   type FiltroDisciplina,
 } from '../../lib/clienti'
 import { DISCIPLINA_LABEL } from '../../lib/discipline'
+import { pacchettiInEvidenza } from '../../lib/packages'
+import { ClienteBadges } from '../pacchetti/ClienteBadges'
+import { usePacchetti } from '../pacchetti/usePacchetti'
 import { useClienti } from './useClienti'
 
 const FILTRI: FiltroDisciplina[] = ['tutti', ...DISCIPLINE]
@@ -31,6 +34,8 @@ function tabClass(filtro: FiltroDisciplina, selected: boolean): string {
 
 export function ClientiPage() {
   const { clienti, error } = useClienti()
+  const { pacchetti = [], lezioni = [] } = usePacchetti({ tutti: true })
+  const [today] = useState(() => new Date())
   // Filters live in the URL so they survive opening a client and coming back.
   const [params, setParams] = useSearchParams()
   const query = params.get('q') ?? ''
@@ -52,6 +57,14 @@ export function ClientiPage() {
   const counts = countByDisciplina(inView)
   const shown = inView.filter((c) => hasDisciplina(c, filtro))
   const archivedCount = (clienti ?? []).filter((c) => c.archiviato).length
+
+  const badgesFor = (clienteId: string) => {
+    const own = pacchetti.filter((p) => p.clienteId === clienteId)
+    return {
+      inEvidenza: pacchettiInEvidenza(own, lezioni.filter((l) => l.clienteId === clienteId), today),
+      daPagare: own.some((p) => !p.pagato),
+    }
+  }
 
   return (
     <>
@@ -117,7 +130,7 @@ export function ClientiPage() {
                     <span className="truncate text-lg">
                       {c.nome} <strong className="font-semibold">{c.cognome}</strong>
                     </span>
-                    <DisciplinaPills discipline={c.discipline} />
+                    <ClienteBadges discipline={c.discipline} {...badgesFor(c.id)} />
                   </span>
                   <ChevronRightIcon className="shrink-0 text-brand-400" />
                 </Link>

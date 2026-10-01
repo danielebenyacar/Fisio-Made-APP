@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { NewPacchetto } from '../types'
 import { MockRepository, STORAGE_KEY, type StorageLike } from './mockRepository'
 
 class MemoryStorage implements StorageLike {
@@ -52,9 +53,9 @@ describe('MockRepository', () => {
     expect((await make().listClienti()).length).toBeGreaterThan(10)
     storage.setItem(STORAGE_KEY, JSON.stringify({ version: 999, clienti: [] }))
     expect((await make().listClienti()).length).toBeGreaterThan(10)
-    // Version 1 (Module 0) had no disciplines: it must be replaced too.
-    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, clienti: [], pacchetti: [], lezioni: [] }))
-    expect((await make().listClienti()).every((c) => Array.isArray(c.discipline))).toBe(true)
+    // Older versions (Modules 0–1) had another shape: they must be replaced too.
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, clienti: [], pacchetti: [], lezioni: [] }))
+    expect((await make().listTipiPacchetto()).length).toBeGreaterThan(0)
     expect((await make().listClienti()).length).toBeGreaterThan(10)
   })
 
@@ -74,30 +75,55 @@ describe('MockRepository', () => {
     expect((await repo.getCliente(first.id))?.nome).not.toBe('Modificato')
   })
 
-  it('creates and updates packages, oldest first per client', async () => {
-    const repo = make()
-    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
-    await expect(
-      repo.createPacchetto({ clienteId: 'missing', lezioniTotali: 5, pagato: true, dataAcquisto: '2026-10-01' }),
-    ).rejects.toThrow('Cliente non trovato')
+  const sedute = (clienteId: string, overrides: Partial<NewPacchetto> = {}): NewPacchetto => ({
+    clienteId,
+    nome: '5 sedute fisio',
+    disciplina: 'fisio',
+    modalita: 'sedute',
+    lezioniTotali: 5,
+    dataInizio: '2026-10-01',
+    dataAcquisto: '2026-10-01',
+    pagato: true,
+    ...overrides,
+  })
+  const newCliente = (repo: MockRepository) =>
+    repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
 
-    await repo.createPacchetto({ clienteId: cliente.id, lezioniTotali: 10, pagato: false, dataAcquisto: '2026-10-01' })
-    const older = await repo.createPacchetto({ clienteId: cliente.id, lezioniTotali: 5, pagato: true, dataAcquisto: '2026-09-01' })
+  it('creates and updates packages, oldest first (FIFO order)', async () => {
+    const repo = make()
+    const cliente = await newCliente(repo)
+    await expect(repo.createPacchetto(sedute('missing'))).rejects.toThrow('Cliente non trovato')
+
+    await repo.createPacchetto(sedute(cliente.id, { lezioniTotali: 10, pagato: false }))
+    const older = await repo.createPacchetto(sedute(cliente.id, { dataInizio: '2026-09-01', dataAcquisto: '2026-09-01' }))
 
     const pacchetti = await repo.listPacchetti({ clienteId: cliente.id })
     expect(pacchetti.map((p) => p.lezioniTotali)).toEqual([5, 10])
+    expect(await repo.getPacchetto(older.id)).toEqual(older)
 
     const paid = await repo.updatePacchetto(pacchetti[1].id, { pagato: true, dataPagamento: '2026-10-01' })
     expect(paid).toMatchObject({ pagato: true, clienteId: cliente.id })
-    expect(older.id).not.toBe(paid.id)
+  })
+
+  it('deletes a package only while it has no lessons', async () => {
+    const repo = make()
+    const cliente = await newCliente(repo)
+    const empty = await repo.createPacchetto(sedute(cliente.id))
+    await repo.deletePacchetto(empty.id)
+    expect(await repo.getPacchetto(empty.id)).toBeNull()
+
+    const used = await repo.createPacchetto(sedute(cliente.id))
+    await repo.createLezione({ clienteId: cliente.id, pacchettoId: used.id, disciplina: 'fisio', data: NOW.toISOString() })
+    await expect(repo.deletePacchetto(used.id)).rejects.toThrow('lezioni registrate')
+    await expect(repo.deletePacchetto('missing')).rejects.toThrow('Pacchetto non trovato')
   })
 
   it('creates lessons as "fatta" by default and deletes them', async () => {
     const repo = make()
-    const cliente = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
-    const pacchetto = await repo.createPacchetto({ clienteId: cliente.id, lezioniTotali: 5, pagato: true, dataAcquisto: '2026-10-01' })
+    const cliente = await newCliente(repo)
+    const pacchetto = await repo.createPacchetto(sedute(cliente.id))
 
-    const lezione = await repo.createLezione({ clienteId: cliente.id, pacchettoId: pacchetto.id, data: NOW.toISOString() })
+    const lezione = await repo.createLezione({ clienteId: cliente.id, pacchettoId: pacchetto.id, disciplina: 'fisio', data: NOW.toISOString() })
     expect(lezione.stato).toBe('fatta')
     expect(await repo.listLezioni({ clienteId: cliente.id })).toHaveLength(1)
 
@@ -106,13 +132,38 @@ describe('MockRepository', () => {
     await expect(repo.deleteLezione(lezione.id)).rejects.toThrow('Lezione non trovata')
   })
 
-  it('rejects a lesson on another client’s package', async () => {
+  it('rejects a lesson on another client’s package or of another discipline', async () => {
     const repo = make()
     const [pacchetto] = await repo.listPacchetti()
-    const other = await repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
+    const other = await newCliente(repo)
     await expect(
-      repo.createLezione({ clienteId: other.id, pacchettoId: pacchetto.id, data: NOW.toISOString() }),
+      repo.createLezione({ clienteId: other.id, pacchettoId: pacchetto.id, disciplina: pacchetto.disciplina, data: NOW.toISOString() }),
     ).rejects.toThrow('altro cliente')
+    const mine = await repo.createPacchetto(sedute(other.id))
+    await expect(
+      repo.createLezione({ clienteId: other.id, pacchettoId: mine.id, disciplina: 'yoga', data: NOW.toISOString() }),
+    ).rejects.toThrow('disciplina diversa')
+  })
+
+  it('manages the price list sorted by discipline then name', async () => {
+    const repo = make()
+    const tipi = await repo.listTipiPacchetto()
+    const order = tipi.map((t) => t.disciplina)
+    expect(order).toEqual([...order].sort((a, b) => ['fisio', 'posturale', 'yoga'].indexOf(a) - ['fisio', 'posturale', 'yoga'].indexOf(b)))
+
+    const created = await repo.createTipoPacchetto({
+      nome: 'Yoga bimestrale',
+      disciplina: 'yoga',
+      modalita: 'abbonamento',
+      durataMesi: 2,
+      prezzo: 110,
+      attivo: true,
+    })
+    expect(created).toMatchObject({ id: 'new-1', createdAt: NOW.toISOString() })
+    const updated = await repo.updateTipoPacchetto(created.id, { attivo: false, prezzo: 115 })
+    expect(await repo.getTipoPacchetto(created.id)).toEqual(updated)
+    expect(updated).toMatchObject({ attivo: false, prezzo: 115, nome: 'Yoga bimestrale' })
+    await expect(repo.updateTipoPacchetto('missing', {})).rejects.toThrow('non trovato')
   })
 
   it('reset() discards changes and restores the demo data', async () => {

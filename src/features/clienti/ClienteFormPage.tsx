@@ -4,6 +4,7 @@ import { useRepository } from '../../app/dataSource'
 import { useGoBack } from '../../app/useGoBack'
 import { BackButton } from '../../components/BackButton'
 import { Button } from '../../components/Button'
+import { CheckboxRow } from '../../components/CheckboxRow'
 import { DisciplinaToggle } from '../../components/DisciplinaToggle'
 import { EmptyState } from '../../components/EmptyState'
 import { TextAreaField, TextField } from '../../components/fields'
@@ -169,18 +170,15 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
         />
 
         <div className="flex flex-col gap-3">
-          <label className="flex min-h-12 items-center gap-3 rounded-xl border border-brand-300 bg-white px-4 py-3 font-semibold">
-            <input
-              type="checkbox"
-              className="size-6 shrink-0 accent-brand-800"
-              checked={form.consensoPrivacy}
-              onChange={(e) => {
-                set('consensoPrivacy', e.target.checked)
-                if (e.target.checked && !form.consensoData) set('consensoData', todayIso)
-              }}
-            />
+          <CheckboxRow
+            checked={form.consensoPrivacy}
+            onChange={(checked) => {
+              set('consensoPrivacy', checked)
+              if (checked && !form.consensoData) set('consensoData', todayIso)
+            }}
+          >
             Consenso privacy firmato
-          </label>
+          </CheckboxRow>
           {form.consensoPrivacy && (
             <TextField
               id={fieldId('consensoData')}

@@ -5,8 +5,11 @@ import type {
   NewCliente,
   NewLezione,
   NewPacchetto,
+  NewTipoPacchetto,
   Pacchetto,
   PacchettoPatch,
+  TipoPacchetto,
+  TipoPacchettoPatch,
 } from './types'
 
 export type ByCliente = { clienteId?: string }
@@ -22,10 +25,19 @@ export interface Repository {
   createCliente(input: NewCliente): Promise<Cliente>
   updateCliente(id: string, patch: ClientePatch): Promise<Cliente>
 
-  /** Sorted oldest first (dataAcquisto, then createdAt). */
+  /** Price list, sorted by disciplina then nome. Inactive types included. */
+  listTipiPacchetto(): Promise<TipoPacchetto[]>
+  getTipoPacchetto(id: string): Promise<TipoPacchetto | null>
+  createTipoPacchetto(input: NewTipoPacchetto): Promise<TipoPacchetto>
+  updateTipoPacchetto(id: string, patch: TipoPacchettoPatch): Promise<TipoPacchetto>
+
+  /** Sorted oldest first (dataInizio, dataAcquisto, createdAt): the FIFO order. */
   listPacchetti(filter?: ByCliente): Promise<Pacchetto[]>
+  getPacchetto(id: string): Promise<Pacchetto | null>
   createPacchetto(input: NewPacchetto): Promise<Pacchetto>
   updatePacchetto(id: string, patch: PacchettoPatch): Promise<Pacchetto>
+  /** Only packages without lessons can be deleted (e.g. created by mistake). */
+  deletePacchetto(id: string): Promise<void>
 
   /** Sorted oldest first by data. */
   listLezioni(filter?: ByCliente): Promise<Lezione[]>
