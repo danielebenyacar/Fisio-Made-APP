@@ -4,7 +4,6 @@ import { DisciplinaPill } from '../../components/DisciplinaPill'
 import { TONE_STYLE } from '../../components/toneStyles'
 import type { Pacchetto } from '../../data'
 import { formatDateIt } from '../../lib/dates'
-import { formatEuro } from '../../lib/money'
 import { descriviAvanzamento, etichettaStato } from '../../lib/pacchettoLabel'
 import type { StatoPacchetto } from '../../lib/packages'
 import { SettimaneBar } from './SettimaneBar'
@@ -20,7 +19,6 @@ type Props = {
 
 export function PacchettoCard({ pacchetto, stato, rinnovato, to, onSegnaPagato }: Props) {
   const etichetta = etichettaStato(pacchetto, stato, rinnovato)
-  const prezzo = pacchetto.prezzo === undefined ? '' : ` · ${formatEuro(pacchetto.prezzo)}`
 
   return (
     <div className={`overflow-hidden rounded-2xl border-l-4 bg-white shadow-sm ${DISCIPLINA_STYLE[pacchetto.disciplina].accent}`}>
@@ -50,8 +48,8 @@ export function PacchettoCard({ pacchetto, stato, rinnovato, to, onSegnaPagato }
         )}
         <span className={`mt-2 block font-semibold ${pacchetto.pagato ? 'text-brand-600' : 'text-danger-700'}`}>
           {pacchetto.pagato
-            ? `Pagato${pacchetto.dataPagamento ? ` il ${formatDateIt(pacchetto.dataPagamento)}` : ''}${prezzo}`
-            : `Da pagare${prezzo}`}
+            ? `Pagato${pacchetto.dataPagamento ? ` il ${formatDateIt(pacchetto.dataPagamento)}` : ''}`
+            : 'Da pagare'}
         </span>
       </Link>
       {!pacchetto.pagato && onSegnaPagato && (

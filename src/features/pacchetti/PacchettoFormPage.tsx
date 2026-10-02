@@ -11,7 +11,9 @@ import { DisciplinaPicker } from '../../components/DisciplinaPicker'
 import { DisciplinaPill } from '../../components/DisciplinaPill'
 import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
 import { EmptyState } from '../../components/EmptyState'
-import { TextAreaField, TextField } from '../../components/fields'
+import { AggiungiButton, NotaField } from '../../components/CampoFacoltativo'
+import { TextField } from '../../components/fields'
+import { focusSoon } from '../../components/focusSoon'
 import { ChevronRightIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import { SegmentedControl } from '../../components/SegmentedControl'
@@ -19,7 +21,7 @@ import { TONE_STYLE } from '../../components/toneStyles'
 import type { Cliente, ModalitaPacchetto, Pacchetto, TipoPacchetto } from '../../data'
 import { DISCIPLINE } from '../../data'
 import { fullName } from '../../lib/clienti'
-import { toIsoDate } from '../../lib/dates'
+import { formatDateIt, toIsoDate } from '../../lib/dates'
 import { descriviTipo, MODALITA_LABEL } from '../../lib/listino'
 import {
   conDataInizio,
@@ -31,7 +33,7 @@ import {
   type PacchettoFormValue,
 } from '../../lib/pacchettoForm'
 import { descriviAvanzamento, etichettaStato } from '../../lib/pacchettoLabel'
-import { haSuccessivo, statoPacchetto } from '../../lib/packages'
+import { haSuccessivo, scadenzaDopoMesi, statoPacchetto } from '../../lib/packages'
 import { useCliente } from '../clienti/useClienti'
 import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 import { SettimaneBar } from './SettimaneBar'
@@ -85,7 +87,7 @@ function NuovoPacchetto({ cliente, goBack }: { cliente: Cliente; goBack: () => v
         <BackButton label="Annulla" onClick={goBack} />
         <PageTitle>Nuovo pacchetto</PageTitle>
         <p className="mt-1 text-brand-600">per {fullName(cliente)}</p>
-        <p className="mt-4 font-semibold">Scegli dal listino</p>
+        <p className="mt-4 font-semibold">Cosa ha comprato?</p>
         {tipi === undefined ? null : (
           <div className="mt-2 flex flex-col gap-2">
             {order.flatMap((d) =>
@@ -99,8 +101,8 @@ function NuovoPacchetto({ cliente, goBack }: { cliente: Cliente; goBack: () => v
               className="flex min-h-16 items-center gap-3 rounded-2xl border-2 border-dashed border-brand-300 px-4 py-3 text-left active:bg-brand-100"
             >
               <span className="flex-1">
-                <span className="block font-semibold">Personalizzato</span>
-                <span className="text-brand-600">Un pacchetto che non è nel listino</span>
+                <span className="block font-semibold">Altro</span>
+                <span className="text-brand-600">Un pacchetto diverso da questi</span>
               </span>
               <ChevronRightIcon className="shrink-0 text-brand-400" />
             </button>
@@ -110,16 +112,23 @@ function NuovoPacchetto({ cliente, goBack }: { cliente: Cliente; goBack: () => v
     )
   }
 
+  const tipo = tipi?.find((t) => t.id === form.tipoId)
   return (
     <>
       <BackButton label="Cambia pacchetto" onClick={() => setForm(null)} />
-      <PageTitle>Nuovo pacchetto</PageTitle>
+      <PageTitle>{tipo?.nome ?? 'Nuovo pacchetto'}</PageTitle>
       <p className="mt-1 text-brand-600">per {fullName(cliente)}</p>
+      {tipo && (
+        <p className="mt-3 flex flex-wrap items-center gap-2">
+          <DisciplinaPill disciplina={tipo.disciplina} />
+          <span className="text-brand-700">{descriviTipo(tipo)}</span>
+        </p>
+      )}
       <PacchettoFields
         form={form}
         onChange={setForm}
         today={today}
-        lockKind={form.tipoId !== ''}
+        modo={tipo ? 'listino' : 'altro'}
         submitLabel="Salva pacchetto"
         onSubmit={save}
         onCancel={goBack}
@@ -252,7 +261,7 @@ function ModificaPacchettoForm({
         form={form}
         onChange={setForm}
         today={today}
-        lockKind
+        modo="modifica"
         submitLabel="Salva modifiche"
         onSubmit={save}
         onCancel={goBack}
@@ -299,20 +308,27 @@ type FieldsProps = {
   form: PacchettoForm
   onChange: (form: PacchettoForm) => void
   today: Date
-  /** Discipline and kind come from the price list or an existing package. */
-  lockKind: boolean
+  /**
+   * listino: new package from the price list, everything prefilled;
+   * altro: new package not in the price list; modifica: an existing package.
+   */
+  modo: 'listino' | 'altro' | 'modifica'
   submitLabel: string
   onSubmit: (value: PacchettoFormValue) => Promise<void>
   onCancel: () => void
 }
 
-function PacchettoFields({ form, onChange, today, lockKind, submitLabel, onSubmit, onCancel }: FieldsProps) {
+/** Only what is needed: when it starts, until when, sessions, paid. Price and name come from the price list. */
+function PacchettoFields({ form, onChange, today, modo, submitLabel, onSubmit, onCancel }: FieldsProps) {
   const ids = useId()
   const fieldId = (name: string) => `${ids}-${name}`
   const [errors, setErrors] = useState<PacchettoFormErrors>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
+  // An end date for sessions only when there is one already or it is asked for.
+  const [showScadenza, setShowScadenza] = useState(form.scadenza !== '')
   const todayIso = toIsoDate(today)
+  const abbonamento = form.modalita === 'abbonamento'
 
   const update = (next: PacchettoForm, field?: keyof PacchettoFormErrors) => {
     onChange(next)
@@ -337,16 +353,7 @@ function PacchettoFields({ form, onChange, today, lockKind, submitLabel, onSubmi
 
   return (
     <form noValidate onSubmit={handleSubmit} className="mt-5 flex flex-col gap-5">
-      <TextField
-        id={fieldId('nome')}
-        label="Nome *"
-        value={form.nome}
-        onChange={(e) => update({ ...form, nome: e.target.value }, 'nome')}
-        error={errors.nome}
-        autoComplete="off"
-      />
-
-      {!lockKind && (
+      {modo === 'altro' && (
         <>
           <div>
             <p id={fieldId('disciplina')} className="mb-1.5 font-semibold">
@@ -366,109 +373,78 @@ function PacchettoFields({ form, onChange, today, lockKind, submitLabel, onSubmi
             <SegmentedControl
               value={form.modalita}
               options={MODALITA_OPTIONS}
-              onChange={(modalita) => update({ ...form, modalita })}
+              onChange={(modalita) =>
+                update({
+                  ...form,
+                  modalita,
+                  // A subscription needs an end: propose one month, it can be changed.
+                  scadenza:
+                    modalita === 'sedute'
+                      ? showScadenza
+                        ? form.scadenza
+                        : ''
+                      : form.scadenza ||
+                        (/^\d{4}-\d{2}-\d{2}$/.test(form.dataInizio) ? scadenzaDopoMesi(form.dataInizio, 1) : ''),
+                })
+              }
               labelledBy={fieldId('modalita')}
             />
           </div>
         </>
       )}
 
-      {form.modalita === 'sedute' ? (
-        <>
-          <TextField
-            id={fieldId('lezioni')}
-            label="Numero di sedute *"
-            inputMode="numeric"
-            value={form.lezioni}
-            onChange={(e) => update({ ...form, lezioni: e.target.value }, 'lezioni')}
-            error={errors.lezioni}
-          />
-          <TextField
-            id={fieldId('dataAcquisto')}
-            label="Data di acquisto *"
-            type="date"
-            value={form.dataAcquisto}
-            // Sessions are usable from the purchase day.
-            onChange={(e) => update({ ...form, dataAcquisto: e.target.value, dataInizio: e.target.value }, 'dataAcquisto')}
-            error={errors.dataAcquisto ?? errors.dataInizio}
-          />
-          <TextField
-            id={fieldId('scadenza')}
-            label="Scadenza (facoltativa)"
-            type="date"
-            min={form.dataInizio}
-            value={form.scadenza}
-            onChange={(e) => update({ ...form, scadenza: e.target.value }, 'scadenza')}
-            error={errors.scadenza}
-          />
-        </>
-      ) : (
-        <>
-          <TextField
-            id={fieldId('dataInizio')}
-            label="Inizio *"
-            type="date"
-            value={form.dataInizio}
-            onChange={(e) => update(conDataInizio(form, e.target.value), 'dataInizio')}
-            error={errors.dataInizio}
-          />
-          <TextField
-            id={fieldId('scadenza')}
-            label="Ultimo giorno valido *"
-            type="date"
-            min={form.dataInizio}
-            value={form.scadenza}
-            onChange={(e) => update({ ...form, scadenza: e.target.value }, 'scadenza')}
-            error={errors.scadenza}
-          />
-          <TextField
-            id={fieldId('dataAcquisto')}
-            label="Data di acquisto *"
-            type="date"
-            value={form.dataAcquisto}
-            onChange={(e) => update({ ...form, dataAcquisto: e.target.value }, 'dataAcquisto')}
-            error={errors.dataAcquisto}
-          />
-        </>
+      {!abbonamento && modo !== 'listino' && (
+        <TextField
+          id={fieldId('lezioni')}
+          label="Numero di sedute *"
+          inputMode="numeric"
+          value={form.lezioni}
+          onChange={(e) => update({ ...form, lezioni: e.target.value }, 'lezioni')}
+          error={errors.lezioni}
+        />
       )}
 
       <TextField
-        id={fieldId('prezzo')}
-        label="Prezzo in €"
-        inputMode="decimal"
-        value={form.prezzo}
-        onChange={(e) => update({ ...form, prezzo: e.target.value }, 'prezzo')}
-        error={errors.prezzo}
+        id={fieldId('dataInizio')}
+        label="Dal *"
+        type="date"
+        value={form.dataInizio}
+        onChange={(e) => update(conDataInizio(form, e.target.value), 'dataInizio')}
+        error={errors.dataInizio}
       />
 
-      <div className="flex flex-col gap-3">
-        <CheckboxRow
-          checked={form.pagato}
-          onChange={(pagato) =>
-            update({ ...form, pagato, dataPagamento: pagato ? form.dataPagamento || todayIso : '' })
-          }
+      {modo === 'listino' ? (
+        // From the price list the end follows the start date.
+        form.scadenza && <p className="-mt-2 font-semibold text-brand-700">Valido fino al {formatDateIt(form.scadenza)}</p>
+      ) : abbonamento || showScadenza ? (
+        <TextField
+          id={fieldId('scadenza')}
+          label={abbonamento ? 'Fino al *' : 'Fino al'}
+          type="date"
+          min={form.dataInizio}
+          value={form.scadenza}
+          onChange={(e) => update({ ...form, scadenza: e.target.value }, 'scadenza')}
+          error={errors.scadenza}
+        />
+      ) : (
+        <AggiungiButton
+          onClick={() => {
+            setShowScadenza(true)
+            focusSoon(fieldId('scadenza'))
+          }}
         >
-          Già pagato
-        </CheckboxRow>
-        {form.pagato && (
-          <TextField
-            id={fieldId('dataPagamento')}
-            label="Data del pagamento"
-            type="date"
-            max={todayIso}
-            value={form.dataPagamento}
-            onChange={(e) => update({ ...form, dataPagamento: e.target.value }, 'dataPagamento')}
-            error={errors.dataPagamento}
-          />
-        )}
-      </div>
+          Aggiungi una scadenza
+        </AggiungiButton>
+      )}
 
-      <TextAreaField
-        id={fieldId('note')}
-        label="Note"
-        value={form.note}
-        onChange={(e) => update({ ...form, note: e.target.value })}
-      />
+      <CheckboxRow
+        checked={form.pagato}
+        onChange={(pagato) => update({ ...form, pagato, dataPagamento: pagato ? form.dataPagamento || todayIso : '' })}
+      >
+        Già pagato
+      </CheckboxRow>
+
+      <NotaField value={form.note} onChange={(note) => update({ ...form, note })} />
 
       {saveError && (
         <p role="alert" className="font-semibold text-danger-700">

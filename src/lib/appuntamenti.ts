@@ -1,4 +1,4 @@
-import { addHours, addMinutes, isSameDay, startOfHour } from 'date-fns'
+import { addMinutes } from 'date-fns'
 import type { Appuntamento, Disciplina, NewAppuntamento } from '../data/types'
 import { daSegnare, dataOra, oraDi } from './agenda'
 import { toIsoDate } from './dates'
@@ -25,23 +25,6 @@ export function orario(inizio: Date, durataMinuti: number): string {
   return `${oraDi(inizio)}–${oraDi(addMinutes(inizio, durataMinuti))}`
 }
 
-/** Other non-cancelled appointments overlapping [inizio, inizio + durata). */
-export function sovrapposizioni(
-  inizio: Date,
-  durataMinuti: number,
-  appuntamenti: Appuntamento[],
-  ignoraId?: string,
-): Appuntamento[] {
-  const start = inizio.getTime()
-  const end = addMinutes(inizio, durataMinuti).getTime()
-  return appuntamenti.filter((a) => {
-    if (a.id === ignoraId || a.stato === 'annullato') return false
-    const aStart = new Date(a.inizio).getTime()
-    const aEnd = addMinutes(new Date(a.inizio), a.durataMinuti).getTime()
-    return aStart < end && start < aEnd
-  })
-}
-
 export type AppuntamentoForm = {
   clienteId: string
   disciplina: Disciplina | ''
@@ -53,13 +36,6 @@ export type AppuntamentoForm = {
 }
 
 export type AppuntamentoFormErrors = Partial<Record<'clienteId' | 'disciplina' | 'giorno' | 'ora' | 'durataMinuti', string>>
-
-/** Default start: next full hour if the day is today, otherwise 09:00. */
-export function oraProposta(giorno: string, now: Date): string {
-  if (giorno !== toIsoDate(now)) return '09:00'
-  const next = startOfHour(addHours(now, 1))
-  return isSameDay(next, now) ? oraDi(next) : '20:00'
-}
 
 export function appuntamentoToForm(app: Appuntamento): AppuntamentoForm {
   const inizio = new Date(app.inizio)
@@ -81,8 +57,8 @@ export function validateAppuntamentoForm(
   if (!form.clienteId) errors.clienteId = 'Scegli il cliente'
   if (!form.disciplina) errors.disciplina = 'Scegli la disciplina'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.giorno)) errors.giorno = 'Data non valida'
-  const time = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(form.ora)
-  if (!time) errors.ora = 'Orario non valido'
+  if (!form.ora) errors.ora = 'Scegli un orario'
+  else if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(form.ora)) errors.ora = 'Orario non valido'
   const durata = parseIntIn(form.durataMinuti, 15, 240)
   if (durata === null) errors.durataMinuti = 'Durata in minuti, da 15 a 240'
 

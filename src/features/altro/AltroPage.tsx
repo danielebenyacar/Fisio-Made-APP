@@ -67,7 +67,7 @@ function DemoDataCard({ source }: { source: MockSource }) {
       <ConfirmSheet
         open={confirming === 'svuota'}
         title="Partire da zero?"
-        message="Spariscono tutti i clienti, i pacchetti, le lezioni, i corsi e gli appuntamenti. Resta solo il listino con i prezzi di esempio. Potrai sempre tornare ai dati di prova con “Reimposta dati demo”."
+        message="Spariscono tutti i clienti, i pacchetti, le lezioni, i corsi e gli appuntamenti. Restano solo i prezzi di esempio. Potrai sempre tornare ai dati di prova con “Reimposta dati demo”."
         confirmLabel="Inizia da zero"
         onConfirm={handleConfirm}
         onCancel={() => setConfirming(null)}
@@ -83,22 +83,23 @@ export function AltroPage() {
       <PageTitle>Altro</PageTitle>
       <div className="mt-6 flex flex-col gap-4">
         <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Prezzi</h2>
+          <p className="mt-2 text-brand-700">
+            Pacchetti di sedute e abbonamenti che vendi, con il loro prezzo. I prezzi si vedono e si cambiano
+            solo qui.
+          </p>
+          <div className="mt-5">
+            <ButtonLink to="/altro/listino" variant="secondary">
+              Apri i prezzi
+            </ButtonLink>
+          </div>
+        </section>
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-xl font-bold">Corsi settimanali</h2>
           <p className="mt-2 text-brand-700">I gruppi di yoga e posturale con giorno e orario fissi.</p>
           <div className="mt-5">
             <ButtonLink to="/altro/corsi" variant="secondary">
               Apri i corsi
-            </ButtonLink>
-          </div>
-        </section>
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-bold">Listino</h2>
-          <p className="mt-2 text-brand-700">
-            Pacchetti di sedute e abbonamenti che vendi, con durata e prezzo.
-          </p>
-          <div className="mt-5">
-            <ButtonLink to="/altro/listino" variant="secondary">
-              Apri il listino
             </ButtonLink>
           </div>
         </section>

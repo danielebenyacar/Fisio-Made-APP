@@ -219,7 +219,7 @@ function Dettaglio({ appuntamento, cliente, reload, goBack }: DettaglioProps) {
         <p className="mt-2 text-brand-700">
           {cliente.nome} non ha sedute disponibili per questa data.{' '}
           {appuntamento.valutazione
-            ? 'Crea prima il pacchetto “Valutazione posturale” dal listino.'
+            ? 'Crea prima il pacchetto “Valutazione posturale”.'
             : 'Crea prima un nuovo pacchetto.'}
         </p>
         <div className="mt-6 flex flex-col gap-3">

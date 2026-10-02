@@ -6,14 +6,16 @@ import type {
   TipoPacchetto,
 } from '../data/types'
 import { toIsoDate } from './dates'
+import { DISCIPLINA_LABEL } from './discipline'
 import { parseIntIn } from './listino'
 import { euroToInput, parseEuro } from './money'
 import { scadenzaDopoMesi } from './packages'
 import { collapseSpaces } from './text'
 
+/** Fields of a package. Name, price and purchase date come from the price list and are not shown. */
 export type PacchettoForm = {
   tipoId: string // '' for a custom package
-  nome: string
+  nome: string // '' for a custom package: named automatically
   disciplina: Disciplina | ''
   modalita: ModalitaPacchetto
   lezioni: string
@@ -29,7 +31,7 @@ export type PacchettoForm = {
 }
 
 export type PacchettoFormErrors = Partial<
-  Record<'nome' | 'disciplina' | 'lezioni' | 'dataAcquisto' | 'dataInizio' | 'scadenza' | 'prezzo' | 'dataPagamento', string>
+  Record<'disciplina' | 'lezioni' | 'dataAcquisto' | 'dataInizio' | 'scadenza' | 'prezzo' | 'dataPagamento', string>
 >
 
 export type PacchettoFormValue = Omit<NewPacchetto, 'clienteId'>
@@ -81,6 +83,17 @@ export function conDataInizio(form: PacchettoForm, dataInizio: string): Pacchett
   }
 }
 
+/** Name of a package not in the price list: "8 sedute fisio", "Abbonamento yoga". */
+export function nomeAutomatico(
+  disciplina: Disciplina,
+  modalita: ModalitaPacchetto,
+  lezioni: number | undefined,
+): string {
+  const label = DISCIPLINA_LABEL[disciplina].toLowerCase()
+  if (modalita === 'abbonamento') return `Abbonamento ${label}`
+  return `${lezioni} ${lezioni === 1 ? 'seduta' : 'sedute'} ${label}`
+}
+
 const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= '1900-01-01'
 
 export function validatePacchettoForm(
@@ -88,8 +101,6 @@ export function validatePacchettoForm(
   today: Date,
 ): { ok: true; value: PacchettoFormValue } | { ok: false; errors: PacchettoFormErrors } {
   const errors: PacchettoFormErrors = {}
-  const nome = collapseSpaces(form.nome)
-  if (!nome) errors.nome = 'Inserisci il nome'
   if (!form.disciplina) errors.disciplina = 'Scegli la disciplina'
 
   let lezioniTotali: number | undefined
@@ -123,7 +134,7 @@ export function validatePacchettoForm(
     ok: true,
     value: {
       tipoId: form.tipoId || undefined,
-      nome,
+      nome: collapseSpaces(form.nome) || nomeAutomatico(form.disciplina, form.modalita, lezioniTotali),
       disciplina: form.disciplina,
       modalita: form.modalita,
       lezioniTotali,

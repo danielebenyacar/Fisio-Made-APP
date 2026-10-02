@@ -1,4 +1,3 @@
-import { addDays } from 'date-fns'
 import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useRepository } from '../../app/dataSource'
@@ -7,26 +6,21 @@ import { BackButton } from '../../components/BackButton'
 import { Button } from '../../components/Button'
 import { CheckboxRow } from '../../components/CheckboxRow'
 import { ClientePicker } from '../../components/ClientePicker'
-import { DisciplinaPicker } from '../../components/DisciplinaPicker'
 import { EmptyState } from '../../components/EmptyState'
-import { TextAreaField, TextField } from '../../components/fields'
-import { AlertIcon } from '../../components/icons'
+import { NotaField } from '../../components/CampoFacoltativo'
+import { TextField } from '../../components/fields'
 import { PageTitle } from '../../components/PageTitle'
 import type { Appuntamento, Cliente, Pacchetto } from '../../data'
-import { dataOra } from '../../lib/agenda'
 import {
   appuntamentoToForm,
-  oraProposta,
-  orario,
-  sovrapposizioni,
   validateAppuntamentoForm,
   type AppuntamentoForm,
   type AppuntamentoFormErrors,
 } from '../../lib/appuntamenti'
 import { fullName } from '../../lib/clienti'
 import { parseDateText, toIsoDate } from '../../lib/dates'
-import { parseIsoDate } from '../../lib/packages'
 import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
+import { ScegliOrario } from './ScegliOrario'
 
 type Dati = { clienti: Cliente[]; pacchetti: Pacchetto[]; appuntamento?: Appuntamento | null }
 
@@ -81,54 +75,36 @@ type FormViewProps = {
 
 function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewProps) {
   const repository = useRepository()
-  const { aggiungi, rimuoviSeNonUsata } = useDisciplineAutomatiche()
-  const ids = useId()
-  const fieldId = (name: string) => `${ids}-${name}`
+  const { aggiungi } = useDisciplineAutomatiche()
+  const durataId = useId()
   const [now] = useState(() => new Date())
   const [form, setForm] = useState<AppuntamentoForm>(() => {
     if (appuntamento) return appuntamentoToForm(appuntamento)
-    const day = giorno ?? toIsoDate(now)
     const cliente = dati.clienti.find((c) => c.id === clienteId)
     return {
       clienteId: cliente?.id ?? '',
+      // Individual sessions are fisio; groups are booked in Altro → Corsi.
       disciplina: 'fisio',
-      giorno: day,
-      ora: oraProposta(day, now),
+      giorno: giorno && giorno >= toIsoDate(now) ? giorno : toIsoDate(now),
+      ora: '',
       durataMinuti: '60',
-      valutazione: cliente ? !dati.pacchetti.some((p) => p.clienteId === cliente.id && p.disciplina === 'fisio') : false,
+      valutazione: cliente ? primaVolta(cliente.id) : false,
       note: '',
     }
   })
   const [errors, setErrors] = useState<AppuntamentoFormErrors>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
-  const [sameDay, setSameDay] = useState<Appuntamento[]>([])
 
-  // Appointments of the chosen day, to warn about overlaps.
-  useEffect(() => {
-    if (parseDateText(form.giorno) !== form.giorno) return
-    let cancelled = false
-    const start = parseIsoDate(form.giorno)
-    repository
-      .listAppuntamenti({ da: start.toISOString(), a: addDays(start, 1).toISOString() })
-      .then((list) => !cancelled && setSameDay(list))
-    return () => {
-      cancelled = true
-    }
-  }, [repository, form.giorno])
+  /** No fisio package yet: the first session is the postural assessment. */
+  function primaVolta(id: string) {
+    return !dati.pacchetti.some((p) => p.clienteId === id && p.disciplina === 'fisio')
+  }
 
   const cliente = dati.clienti.find((c) => c.id === form.clienteId)
   const set = <K extends keyof AppuntamentoForm>(key: K, value: AppuntamentoForm[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
     setErrors((e) => ({ ...e, [key]: undefined }))
-  }
-
-  const durata = Number(form.durataMinuti) || 60
-  const validTime = /^\d{2}:\d{2}$/.test(form.ora) && parseDateText(form.giorno) === form.giorno
-  const conflicts = validTime ? sovrapposizioni(dataOra(form.giorno, form.ora), durata, sameDay, appuntamento?.id) : []
-  const nameOf = (id: string) => {
-    const c = dati.clienti.find((x) => x.id === id)
-    return c ? fullName(c) : 'un altro cliente'
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -141,9 +117,8 @@ function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewPro
     setSaving(true)
     try {
       if (appuntamento) {
-        const { disciplina, inizio, durataMinuti, valutazione, note } = result.value
-        await repository.updateAppuntamento(appuntamento.id, { disciplina, inizio, durataMinuti, valutazione, note })
-        if (disciplina !== appuntamento.disciplina) await rimuoviSeNonUsata(appuntamento.clienteId, appuntamento.disciplina)
+        const { inizio, durataMinuti, valutazione, note } = result.value
+        await repository.updateAppuntamento(appuntamento.id, { inizio, durataMinuti, valutazione, note })
       } else {
         await repository.createAppuntamento(result.value)
       }
@@ -178,8 +153,7 @@ function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewPro
               clienti={dati.clienti}
               onSelect={(c) => {
                 set('clienteId', c.id)
-                // First fisio appointment of someone without fisio packages: the assessment.
-                set('valutazione', !dati.pacchetti.some((p) => p.clienteId === c.id && p.disciplina === 'fisio'))
+                set('valutazione', primaVolta(c.id))
               }}
             />
           )}
@@ -187,57 +161,36 @@ function FormView({ dati, appuntamento, giorno, clienteId, goBack }: FormViewPro
         </div>
 
         <div>
-          <p id={fieldId('disciplina')} className="mb-1.5 font-semibold">
-            Disciplina
-          </p>
-          <DisciplinaPicker value={form.disciplina} onChange={(d) => set('disciplina', d)} labelledBy={fieldId('disciplina')} />
-        </div>
-
-        <TextField
-          id={fieldId('giorno')}
-          label="Giorno *"
-          type="date"
-          value={form.giorno}
-          onChange={(e) => set('giorno', e.target.value)}
-          error={errors.giorno}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <TextField
-            id={fieldId('ora')}
-            label="Ora *"
-            type="time"
-            step={900}
-            value={form.ora}
-            onChange={(e) => set('ora', e.target.value)}
-            error={errors.ora}
-          />
-          <TextField
-            id={fieldId('durata')}
-            label="Durata (min)"
-            inputMode="numeric"
-            value={form.durataMinuti}
-            onChange={(e) => set('durataMinuti', e.target.value)}
-            error={errors.durataMinuti}
+          <p className="mb-1.5 font-semibold">Quando *</p>
+          <ScegliOrario
+            giorno={form.giorno}
+            ora={form.ora}
+            durataMinuti={Number(form.durataMinuti) || 60}
+            now={now}
+            ignoraAppuntamentoId={appuntamento?.id}
+            onChange={(g, o) => {
+              setForm((f) => ({ ...f, giorno: g, ora: o }))
+              setErrors((e) => ({ ...e, giorno: undefined, ora: undefined }))
+            }}
+            error={errors.ora ?? errors.giorno}
+            extraManuale={
+              <TextField
+                id={durataId}
+                label="Durata (min)"
+                inputMode="numeric"
+                value={form.durataMinuti}
+                onChange={(e) => set('durataMinuti', e.target.value)}
+                error={errors.durataMinuti}
+              />
+            }
           />
         </div>
-
-        {conflicts.length > 0 && (
-          <p role="alert" className="flex gap-2 rounded-xl border border-warning-300 bg-warning-50 p-3 font-semibold text-warning-900">
-            <AlertIcon className="mt-0.5 shrink-0" width={20} height={20} />
-            <span>
-              Si sovrappone a:{' '}
-              {conflicts
-                .map((c) => `${nameOf(c.clienteId)} (${orario(new Date(c.inizio), c.durataMinuti)})`)
-                .join(', ')}
-            </span>
-          </p>
-        )}
 
         <CheckboxRow checked={form.valutazione} onChange={(v) => set('valutazione', v)}>
           Valutazione posturale (prima seduta)
         </CheckboxRow>
 
-        <TextAreaField id={fieldId('note')} label="Note" value={form.note} onChange={(e) => set('note', e.target.value)} />
+        <NotaField value={form.note} onChange={(note) => set('note', note)} />
 
         {saveError && (
           <p role="alert" className="font-semibold text-danger-700">

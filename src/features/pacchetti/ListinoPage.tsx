@@ -9,6 +9,7 @@ import { PageTitle } from '../../components/PageTitle'
 import { DISCIPLINE } from '../../data'
 import { DISCIPLINA_LABEL } from '../../lib/discipline'
 import { descriviTipo } from '../../lib/listino'
+import { formatEuro } from '../../lib/money'
 import { useListino } from './usePacchetti'
 
 export function ListinoPage() {
@@ -19,18 +20,18 @@ export function ListinoPage() {
     <>
       <BackButton label="Altro" onClick={goBack} />
       <div className="flex items-center justify-between gap-3">
-        <PageTitle>Listino</PageTitle>
+        <PageTitle>Prezzi</PageTitle>
         <ButtonLink to="/altro/listino/nuovo" className="shrink-0">
           <PlusIcon width={20} height={20} strokeWidth={2.5} />
           Nuovo
         </ButtonLink>
       </div>
       <p className="mt-2 text-brand-700">
-        Pacchetti e abbonamenti che vendi. Quando ne assegni uno a un cliente, nome, durata e prezzo
-        si compilano da qui e puoi sempre cambiarli caso per caso.
+        Pacchetti e abbonamenti che vendi. Tocca una voce per cambiare il prezzo: vale per i pacchetti
+        che venderai da ora in poi.
       </p>
 
-      {error && <EmptyState>Non riesco a caricare il listino. Riprova tra poco.</EmptyState>}
+      {error && <EmptyState>Non riesco a caricare i prezzi. Riprova tra poco.</EmptyState>}
 
       {tipi &&
         DISCIPLINE.map((disciplina) => {
@@ -55,6 +56,9 @@ export function ListinoPage() {
                           <span className="font-semibold">{tipo.nome}</span>
                           <span className="text-brand-600">{descriviTipo(tipo)}</span>
                           {!tipo.attivo && <span className="font-semibold text-brand-600">Non in vendita</span>}
+                        </span>
+                        <span className="shrink-0 text-lg font-bold tabular-nums">
+                          {tipo.prezzo === undefined ? '—' : formatEuro(tipo.prezzo)}
                         </span>
                         <ChevronRightIcon className="shrink-0 text-brand-400" />
                       </Link>

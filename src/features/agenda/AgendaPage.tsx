@@ -1,20 +1,20 @@
 import { addDays, format, isSameDay } from 'date-fns'
-import { it } from 'date-fns/locale'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ButtonLink } from '../../components/ButtonLink'
 import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
 import { DisciplinaPill } from '../../components/DisciplinaPill'
 import { EmptyState } from '../../components/EmptyState'
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../../components/icons'
+import { ChevronRightIcon, PlusIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import { TONE_STYLE } from '../../components/toneStyles'
 import type { Appuntamento, Cliente } from '../../data'
 import { giorniSettimana, occorrenzeCorsi, presentiOccorrenza, type Occorrenza } from '../../lib/agenda'
 import { orario, statoAppuntamentoLabel } from '../../lib/appuntamenti'
-import { formatDateShort, formatDayHeading, parseDateText, toIsoDate } from '../../lib/dates'
+import { formatDayHeading, parseDateText, toIsoDate } from '../../lib/dates'
 import { parseIsoDate } from '../../lib/packages'
 import { useAgenda } from './useAgenda'
+import { WeekStrip } from './WeekStrip'
 
 type Voce =
   | { tipo: 'corso'; inizio: Date; occorrenza: Occorrenza; presenti: number; iscritti: number }
@@ -64,53 +64,8 @@ export function AgendaPage() {
         </ButtonLink>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => select(addDays(selected, -7))}
-          aria-label="Settimana prima"
-          className="flex min-h-12 min-w-12 items-center justify-center rounded-xl text-brand-700 active:bg-brand-100"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <p className="font-semibold">
-          {formatDateShort(toIsoDate(week[0]))} – {formatDateShort(toIsoDate(week[6]))}
-        </p>
-        <button
-          type="button"
-          onClick={() => select(addDays(selected, 7))}
-          aria-label="Settimana dopo"
-          className="flex min-h-12 min-w-12 items-center justify-center rounded-xl text-brand-700 active:bg-brand-100"
-        >
-          <ChevronRightIcon />
-        </button>
-      </div>
-
-      <div role="group" aria-label="Giorni della settimana" className="mt-1 grid grid-cols-7 gap-1">
-        {week.map((day) => {
-          const iso = toIsoDate(day)
-          const isSelected = iso === selectedIso
-          const isToday = isSameDay(day, now)
-          return (
-            <button
-              key={iso}
-              type="button"
-              aria-pressed={isSelected}
-              aria-label={formatDayHeading(day)}
-              onClick={() => select(day)}
-              className={`flex min-h-14 flex-col items-center justify-center rounded-xl leading-tight ${
-                isSelected ? 'bg-brand-800 text-white' : isToday ? 'bg-white font-bold ring-2 ring-brand-800' : 'bg-white'
-              }`}
-            >
-              <span className="text-sm uppercase">{format(day, 'EEEEE', { locale: it })}</span>
-              <span className="text-lg font-semibold">{format(day, 'd')}</span>
-              <span
-                className={`mt-0.5 size-1.5 rounded-full ${giorniConVoci.has(iso) ? (isSelected ? 'bg-white' : 'bg-brand-500') : ''}`}
-                aria-hidden="true"
-              />
-            </button>
-          )
-        })}
+      <div className="mt-4">
+        <WeekStrip selected={selected} now={now} onSelect={select} marked={giorniConVoci} />
       </div>
 
       <div className="mt-5 flex items-center gap-2">

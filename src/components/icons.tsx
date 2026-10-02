@@ -142,3 +142,12 @@ export function MessageIcon(props: IconProps) {
     </Icon>
   )
 }
+
+export function TicketIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 9a3 3 0 0 0 0 6v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a3 3 0 0 0 0-6V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z" />
+      <path d="M13 5v2M13 11v2M13 17v2" />
+    </Icon>
+  )
+}

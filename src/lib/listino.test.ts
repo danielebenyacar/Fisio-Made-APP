@@ -2,19 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { TipoPacchetto } from '../data/types'
 import { descriviTipo, EMPTY_TIPO_FORM, parseIntIn, tipoToForm, validateTipoForm, type TipoForm } from './listino'
 
-const nbsp = (s: string) => s.replace(/\s/g, ' ')
-
 describe('descriviTipo', () => {
   it('describes sessions packages', () => {
-    expect(nbsp(descriviTipo({ modalita: 'sedute', lezioni: 10, prezzo: 500 }))).toBe('10 sedute · 500 €')
-    expect(nbsp(descriviTipo({ modalita: 'sedute', lezioni: 1, prezzo: 40 }))).toBe('1 seduta · 40 €')
+    expect(descriviTipo({ modalita: 'sedute', lezioni: 10 })).toBe('10 sedute')
+    expect(descriviTipo({ modalita: 'sedute', lezioni: 1 })).toBe('1 seduta')
     expect(descriviTipo({ modalita: 'sedute', lezioni: 5, durataMesi: 6 })).toBe('5 sedute, valide 6 mesi')
   })
 
   it('describes subscriptions', () => {
-    expect(nbsp(descriviTipo({ modalita: 'abbonamento', durataMesi: 1, prezzo: 60 }))).toBe(
-      '1 mese, 1 lezione a settimana · 60 €',
-    )
+    expect(descriviTipo({ modalita: 'abbonamento', durataMesi: 1 })).toBe('1 mese, 1 lezione a settimana')
     expect(descriviTipo({ modalita: 'abbonamento', durataMesi: 3 })).toBe('3 mesi, 1 lezione a settimana')
   })
 })

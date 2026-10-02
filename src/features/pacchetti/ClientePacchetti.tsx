@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useRepository } from '../../app/dataSource'
-import { ButtonLink } from '../../components/ButtonLink'
 import { EmptyState } from '../../components/EmptyState'
-import { PlusIcon } from '../../components/icons'
 import { toIsoDate } from '../../lib/dates'
 import { haSuccessivo, ordinaPacchetti, pacchettiInEvidenza, statoPacchetto } from '../../lib/packages'
 import { PacchettoCard } from './PacchettoCard'
 import { usePacchetti } from './usePacchetti'
 
-/** "Pacchetti" section of the client page: packages in use first, finished ones in the history. */
+/** "Pacchetti" section of the client page: packages in use first, finished ones in the history. Hidden when there are none. */
 export function ClientePacchetti({ clienteId, today }: { clienteId: string; today: Date }) {
   const repository = useRepository()
   const { pacchetti, lezioni, error, reload } = usePacchetti({ clienteId })
@@ -20,7 +18,7 @@ export function ClientePacchetti({ clienteId, today }: { clienteId: string; toda
   }
 
   if (error) return <EmptyState>Non riesco a caricare i pacchetti. Riprova tra poco.</EmptyState>
-  if (!pacchetti || !lezioni) return null
+  if (!pacchetti || !lezioni || pacchetti.length === 0) return null
 
   // In evidence: every package still usable, plus — for disciplines with none — the latest finished one.
   const inEvidenza = new Set([...pacchettiInEvidenza(pacchetti, lezioni, today).values()].map((x) => x.pacchetto.id))
@@ -34,16 +32,10 @@ export function ClientePacchetti({ clienteId, today }: { clienteId: string; toda
 
   return (
     <section className="mt-6">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Pacchetti</h2>
-        <ButtonLink to={`/clienti/${clienteId}/pacchetti/nuovo`} className="shrink-0" aria-label="Nuovo pacchetto">
-          <PlusIcon width={20} height={20} strokeWidth={2.5} />
-          Nuovo
-        </ButtonLink>
-      </div>
+      <h2 className="mb-2 text-xl font-bold">Pacchetti</h2>
 
       {current.length === 0 ? (
-        <EmptyState>Nessun pacchetto. Tocca “Nuovo” per assegnarne uno dal listino.</EmptyState>
+        <EmptyState>Nessun pacchetto in corso.</EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
           {current.map(({ pacchetto, stato, rinnovato }) => (

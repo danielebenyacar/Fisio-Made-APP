@@ -1,5 +1,5 @@
 import type { Disciplina, ModalitaPacchetto, NewTipoPacchetto, TipoPacchetto } from '../data/types'
-import { euroToInput, formatEuro, parseEuro } from './money'
+import { euroToInput, parseEuro } from './money'
 import { collapseSpaces } from './text'
 
 export const MODALITA_LABEL: Record<ModalitaPacchetto, string> = {
@@ -9,18 +9,12 @@ export const MODALITA_LABEL: Record<ModalitaPacchetto, string> = {
 
 const mesi = (n: number) => (n === 1 ? '1 mese' : `${n} mesi`)
 
-/** "10 sedute · 500 €", "1 mese, 1 lezione a settimana · 60 €". */
-export function descriviTipo(tipo: Pick<TipoPacchetto, 'modalita' | 'lezioni' | 'durataMesi' | 'prezzo'>): string {
-  const parts: string[] = []
-  if (tipo.modalita === 'sedute') {
-    const n = tipo.lezioni ?? 0
-    parts.push(n === 1 ? '1 seduta' : `${n} sedute`)
-    if (tipo.durataMesi) parts[0] += `, valide ${mesi(tipo.durataMesi)}`
-  } else {
-    parts.push(`${mesi(tipo.durataMesi ?? 0)}, 1 lezione a settimana`)
-  }
-  if (tipo.prezzo !== undefined) parts.push(formatEuro(tipo.prezzo))
-  return parts.join(' · ')
+/** "10 sedute", "5 sedute, valide 6 mesi", "1 mese, 1 lezione a settimana". Prices are shown only in Altro → Prezzi. */
+export function descriviTipo(tipo: Pick<TipoPacchetto, 'modalita' | 'lezioni' | 'durataMesi'>): string {
+  if (tipo.modalita === 'abbonamento') return `${mesi(tipo.durataMesi ?? 0)}, 1 lezione a settimana`
+  const n = tipo.lezioni ?? 0
+  const sedute = n === 1 ? '1 seduta' : `${n} sedute`
+  return tipo.durataMesi ? `${sedute}, valide ${mesi(tipo.durataMesi)}` : sedute
 }
 
 export type TipoForm = {

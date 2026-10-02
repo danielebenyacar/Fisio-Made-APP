@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useRepository } from '../../app/dataSource'
 import { useGoBack } from '../../app/useGoBack'
 import { BackButton } from '../../components/BackButton'
@@ -8,7 +8,7 @@ import { ButtonLink } from '../../components/ButtonLink'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { DisciplinaPills } from '../../components/DisciplinaPill'
 import { EmptyState } from '../../components/EmptyState'
-import { AlertIcon, CheckIcon } from '../../components/icons'
+import { AlertIcon, CalendarIcon, CheckIcon, TicketIcon, UsersIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import type { Cliente } from '../../data'
 import { fullName } from '../../lib/clienti'
@@ -20,14 +20,15 @@ import { useCliente } from './useClienti'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="py-3">
-      <dt className="text-brand-600">{label}</dt>
-      <dd className="mt-0.5 font-semibold">{children}</dd>
+    <div className="flex items-baseline justify-between gap-3 py-3">
+      <dt className="shrink-0 text-brand-600">{label}</dt>
+      <dd className="min-w-0 text-right font-semibold">{children}</dd>
     </div>
   )
 }
 
-const missing = <span className="font-normal text-brand-500">Non indicato</span>
+const AZIONE =
+  'flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl bg-white px-1 py-2 font-semibold shadow-sm active:bg-brand-100'
 
 export function ClienteDetailPage() {
   const { id } = useParams()
@@ -68,6 +69,7 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
   const repository = useRepository()
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [saveError, setSaveError] = useState(false)
+  const [scegliGruppo, setScegliGruppo] = useState(false)
 
   async function save(patch: Partial<Cliente>): Promise<boolean> {
     const previous = cliente
@@ -109,75 +111,98 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
         </p>
       )}
 
-      <section className="mt-3" aria-label="Discipline">
-        {cliente.discipline.length > 0 ? (
+      {cliente.discipline.length > 0 && (
+        <div className="mt-2" role="group" aria-label="Discipline">
           <DisciplinaPills discipline={cliente.discipline} />
-        ) : (
-          <p className="font-semibold text-brand-700">Nessuna disciplina per ora</p>
-        )}
-        <p className="mt-1 text-brand-600">
-          Si aggiornano da sole: gruppo fisso, sedute fisio e pacchetti.
-        </p>
-      </section>
+        </div>
+      )}
 
-      {!cliente.archiviato && <ClientePacchetti clienteId={cliente.id} today={today} />}
-      {!cliente.archiviato && <ClienteAgenda clienteId={cliente.id} now={today} onClienteChange={refresh} />}
+      {!cliente.archiviato && (
+        <>
+          <nav aria-label="Azioni" className="mt-5 grid grid-cols-[1.3fr_1fr_1fr] gap-2">
+            <Link to={`/agenda/appuntamenti/nuovo?cliente=${cliente.id}`} className={AZIONE}>
+              <CalendarIcon className="text-fisio-700" />
+              Appuntamento
+            </Link>
+            <Link to={`/clienti/${cliente.id}/pacchetti/nuovo`} className={AZIONE}>
+              <TicketIcon className="text-brand-700" />
+              Pacchetto
+            </Link>
+            <button type="button" onClick={() => setScegliGruppo(true)} className={AZIONE}>
+              <UsersIcon className="text-yoga-700" />
+              Gruppo
+            </button>
+          </nav>
+          <ClienteAgenda
+            clienteId={cliente.id}
+            now={today}
+            onClienteChange={refresh}
+            scegliGruppo={scegliGruppo}
+            onChiudiScegliGruppo={() => setScegliGruppo(false)}
+          >
+            <ClientePacchetti clienteId={cliente.id} today={today} />
+          </ClienteAgenda>
+        </>
+      )}
 
-      <h2 className="mt-6 mb-2 text-xl font-bold">Dati</h2>
+      <h2 className="mt-8 mb-2 text-xl font-bold">Dati</h2>
       <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">
-        <Row label="Telefono">
-          {cliente.telefono ? (
+        {cliente.telefono && (
+          <Row label="Telefono">
             <a href={`tel:${cliente.telefono}`} className="text-brand-900 underline">
               {formatPhone(cliente.telefono)}
             </a>
-          ) : (
-            missing
-          )}
-        </Row>
-        <Row label="Email">
-          {cliente.email ? (
+          </Row>
+        )}
+        {cliente.email && (
+          <Row label="Email">
             <a href={`mailto:${cliente.email}`} className="break-all text-brand-900 underline">
               {cliente.email}
             </a>
-          ) : (
-            missing
-          )}
-        </Row>
-        <Row label="Data di nascita">
-          {cliente.dataNascita
-            ? `${formatDateIt(cliente.dataNascita)} · ${ageOn(cliente.dataNascita, today)} anni`
-            : missing}
-        </Row>
-        <Row label="Consenso privacy">
+          </Row>
+        )}
+        {cliente.dataNascita && (
+          <Row label="Nascita">
+            {formatDateIt(cliente.dataNascita)} · {ageOn(cliente.dataNascita, today)} anni
+          </Row>
+        )}
+        <Row label="Privacy">
           {cliente.consensoPrivacy ? (
-            <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5">
               <CheckIcon width={20} height={20} strokeWidth={3} className="text-posturale-700" />
-              Firmato{cliente.consensoData && ` il ${formatDateIt(cliente.consensoData)}`}
+              Firmata{cliente.consensoData && ` il ${formatDateIt(cliente.consensoData)}`}
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 text-danger-700">
+            <span className="inline-flex items-center gap-1.5 text-danger-700">
               <AlertIcon width={20} height={20} />
               Da far firmare
             </span>
           )}
         </Row>
         {cliente.note && (
-          <Row label="Note">
-            <span className="font-normal whitespace-pre-line">{cliente.note}</span>
-          </Row>
+          <div className="py-3">
+            <dt className="text-brand-600">Nota</dt>
+            <dd className="mt-0.5 whitespace-pre-line">{cliente.note}</dd>
+          </div>
         )}
       </dl>
 
-      <div className="mt-6 flex flex-col gap-3">
-        <ButtonLink to={`/clienti/${cliente.id}/modifica`}>Modifica dati</ButtonLink>
+      <div className="mt-4 flex flex-col gap-2">
+        <ButtonLink to={`/clienti/${cliente.id}/modifica`} variant="secondary">
+          Modifica dati
+        </ButtonLink>
         {cliente.archiviato ? (
           <Button variant="secondary" onClick={() => save({ archiviato: false })}>
             Ripristina cliente
           </Button>
         ) : (
-          <Button variant="secondary" onClick={() => setConfirmArchive(true)}>
+          <button
+            type="button"
+            onClick={() => setConfirmArchive(true)}
+            className="min-h-12 font-semibold text-brand-600 underline"
+          >
             Archivia cliente
-          </Button>
+          </button>
         )}
       </div>
 

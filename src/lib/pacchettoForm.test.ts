@@ -103,7 +103,19 @@ describe('validatePacchettoForm', () => {
 
   it('reports missing fields of a custom package', () => {
     const result = validatePacchettoForm({ ...formDaTipo(null, TODAY), prezzo: 'boh' }, TODAY)
-    expect(!result.ok && Object.keys(result.errors).sort()).toEqual(['disciplina', 'lezioni', 'nome', 'prezzo'])
+    expect(!result.ok && Object.keys(result.errors).sort()).toEqual(['disciplina', 'lezioni', 'prezzo'])
+  })
+
+  it('names a custom package automatically', () => {
+    const sedute = validatePacchettoForm({ ...formDaTipo(null, TODAY), disciplina: 'fisio', lezioni: '8' }, TODAY)
+    expect(sedute.ok && sedute.value.nome).toBe('8 sedute fisio')
+    const una = validatePacchettoForm({ ...formDaTipo(null, TODAY), disciplina: 'fisio', lezioni: '1' }, TODAY)
+    expect(una.ok && una.value.nome).toBe('1 seduta fisio')
+    const abbonamento = validatePacchettoForm(
+      { ...formDaTipo(null, TODAY), disciplina: 'yoga', modalita: 'abbonamento', scadenza: '2026-12-31' },
+      TODAY,
+    )
+    expect(abbonamento.ok && abbonamento.value).toMatchObject({ nome: 'Abbonamento yoga', prezzo: undefined })
   })
 
   it('round-trips an existing package', () => {

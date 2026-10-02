@@ -28,12 +28,12 @@ export function TipoPacchettoFormPage() {
   const goBack = useGoBack('/altro/listino')
 
   if (!tipoId) return <TipoPacchettoForm goBack={goBack} />
-  if (error) return <EmptyState>Non riesco a caricare il listino. Riprova tra poco.</EmptyState>
+  if (error) return <EmptyState>Non riesco a caricare i prezzi. Riprova tra poco.</EmptyState>
   if (tipo === undefined) return null
   if (tipo === null) {
     return (
       <>
-        <BackButton label="Listino" onClick={goBack} />
+        <BackButton label="Prezzi" onClick={goBack} />
         <EmptyState>Pacchetto non trovato.</EmptyState>
       </>
     )
@@ -81,7 +81,7 @@ function TipoPacchettoForm({ tipo, goBack }: { tipo?: TipoPacchetto; goBack: () 
   return (
     <>
       <BackButton label="Annulla" onClick={goBack} />
-      <PageTitle>{tipo ? 'Modifica pacchetto' : 'Nuovo pacchetto'}</PageTitle>
+      <PageTitle>{tipo ? tipo.nome : 'Nuova voce'}</PageTitle>
 
       <form noValidate onSubmit={handleSubmit} className="mt-5 flex flex-col gap-5">
         <TextField
@@ -92,6 +92,16 @@ function TipoPacchettoForm({ tipo, goBack }: { tipo?: TipoPacchetto; goBack: () 
           error={errors.nome}
           placeholder="Es. 10 sedute fisio"
           autoComplete="off"
+        />
+
+        <TextField
+          id={fieldId('prezzo')}
+          label="Prezzo in €"
+          inputMode="decimal"
+          value={form.prezzo}
+          onChange={(e) => set('prezzo', e.target.value)}
+          error={errors.prezzo}
+          placeholder="Es. 60"
         />
 
         <div>
@@ -154,16 +164,6 @@ function TipoPacchettoForm({ tipo, goBack }: { tipo?: TipoPacchetto; goBack: () 
             placeholder="Es. 1 = mensile, 3 = trimestrale"
           />
         )}
-
-        <TextField
-          id={fieldId('prezzo')}
-          label="Prezzo in €"
-          inputMode="decimal"
-          value={form.prezzo}
-          onChange={(e) => set('prezzo', e.target.value)}
-          error={errors.prezzo}
-          placeholder="Es. 60"
-        />
 
         <CheckboxRow checked={form.attivo} onChange={(attivo) => set('attivo', attivo)}>
           In vendita (compare quando assegni un pacchetto)
