@@ -6,7 +6,9 @@ Questo file è la specifica del progetto. Leggilo per intero all'inizio di ogni 
 
 - App gestionale per lo studio di fisio-posturale-yoga **Fisio Made** (sito pubblico: fisiomade.it, separato da questa app).
 - **Unica utente**: la titolare. Usa l'app **dal telefono**, dimestichezza tecnologica media.
-- Vende lezioni in **pacchetti prepagati**. Problema da risolvere: tenere traccia di pagamenti, lezioni fatte/rimaste, rinnovi, assenze, compleanni.
+- Vende lezioni in **pacchetti prepagati**. Problema da risolvere: tenere traccia di pagamenti, lezioni fatte/rimaste, rinnovi, scadenze, assenze, compleanni.
+- **Fisio**: sedute individuali da 1 ora, vendute a pacchetti di sedute. La prima seduta è la **valutazione posturale**, a prezzo ridotto.
+- **Yoga e posturale**: corsi di gruppo a orari fissi, più gruppi a settimana. Si vendono **abbonamenti** (es. mensile, trimestrale) che danno diritto a **1 lezione a settimana**. Ogni cliente ha di solito un **gruppo fisso**; può capitare che una settimana venga a un altro gruppo: il cambio non è sanzionato, conta come la sua lezione della settimana.
 - I clienti NON usano l'app. Ricevono il riepilogo via WhatsApp (link `wa.me` precompilato).
 - Tutta l'interfaccia è **in italiano**. Codice, nomi di file e variabili in inglese.
 
@@ -34,7 +36,7 @@ Lo sviluppatore lavora **solo da iPad**: nessun ambiente locale. Tutto passa da 
 
 L'app ha un livello dati astratto con due implementazioni, scelte da `VITE_DATA_MODE`:
 
-- `mock`: dati finti in memoria, persistiti in `localStorage` (chiave `fisiomade-demo`). Nessuna chiamata di rete. Banner fisso in alto **"DEMO — dati di prova"**. In "Altro" c'è il pulsante **"Reimposta dati demo"**.
+- `mock`: dati finti in memoria, persistiti in `localStorage` (chiave `fisiomade-demo`). Nessuna chiamata di rete. Banner fisso in alto **"DEMO — dati di prova"**. In "Altro" ci sono i pulsanti **"Reimposta dati demo"** (torna ai dati di prova) e **"Inizia da zero"** (demo vuota: nessun cliente, pacchetto, lezione, corso o appuntamento; resta solo il listino di esempio), entrambi con conferma.
 - `supabase`: dati reali, login obbligatorio.
 
 Regole:
@@ -74,39 +76,68 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - pacchetto con 0 lezioni residue (esaurito)
 - pacchetto con 1 e con 2 residue (da rinnovare)
 - pacchetto non pagato
+- abbonamento in scadenza (entro 7 giorni), abbonamento scaduto senza rinnovo, abbonamento con settimane perse
+- valutazione posturale seguita da un pacchetto di sedute; cliente senza alcun pacchetto
+- listino con almeno un tipo per disciplina e un tipo non in vendita
+- corsi settimanali di yoga e posturale (uno sospeso), con le lezioni degli abbonamenti agganciate al corso del giorno e gli iscritti fissi; un cliente iscritto a un gruppo che questa settimana è venuto a un altro (cambio gruppo)
+- appuntamenti fisio: passati collegati alle lezioni, futuri, uno passato "da segnare", uno annullato, una valutazione per un cliente senza pacchetto
 - cliente senza lezioni da più di 14 giorni (assente)
 - compleanno oggi, tra 2 giorni, tra 3 giorni (alert) e tra 5 giorni (NON in alert)
 - cliente con pacchetto nuovo acquistato mentre il vecchio ha ancora residue
 - cliente con un'assenza registrata (verifica che non scali le residue)
+- abbonamento con una settimana saltata resa recuperabile ("Non farla perdere")
 - cliente senza telefono (il pulsante WhatsApp deve essere disabilitato)
 - cliente archiviato
+- clienti con una, due e tre discipline (coerenti con gruppi, appuntamenti e pacchetti)
 - clienti "normali" senza alert
 
 ## 5. Modello dati
 
 ```ts
+type Disciplina = 'fisio' | 'posturale' | 'yoga'
+
 type Cliente = {
   id: string
   nome: string
   cognome: string
+  discipline: Disciplina[]   // zero, una o più; automatiche (vedi regole), o dall'import Excel
   telefono?: string          // salvato in formato E.164, es. +393331234567
   email?: string
   dataNascita?: string       // YYYY-MM-DD
-  note?: string
-  consensoPrivacy: boolean
-  consensoData?: string      // YYYY-MM-DD
+  note?: string              // solo cose pratiche, niente dati sulla salute (§11)
   archiviato: boolean
   createdAt: string
 }
 
-type Pacchetto = {
+type ModalitaPacchetto = 'sedute' | 'abbonamento'
+
+type TipoPacchetto = {       // voce del listino, modificabile dalla titolare
+  id: string
+  nome: string               // es. "10 sedute fisio", "Yoga mensile"
+  disciplina: Disciplina
+  modalita: ModalitaPacchetto
+  lezioni?: number           // solo 'sedute'
+  durataMesi?: number        // 'abbonamento': durata (obbligatoria); 'sedute': validità facoltativa
+  prezzo?: number            // euro
+  attivo: boolean            // false = non in vendita (resta nello storico)
+  createdAt: string
+}
+
+type Pacchetto = {           // pacchetto o abbonamento venduto a un cliente
   id: string
   clienteId: string
-  lezioniTotali: number      // tagli liberi (es. 1, 5, 10, 20)
+  tipoId?: string            // voce del listino da cui è nato (i dati vengono copiati)
+  nome: string
+  disciplina: Disciplina
+  modalita: ModalitaPacchetto
+  lezioniTotali?: number     // solo 'sedute': tagli liberi (es. 1, 5, 10)
+  dataInizio: string         // YYYY-MM-DD
+  scadenza?: string          // YYYY-MM-DD, ultimo giorno valido; obbligatoria per 'abbonamento'
   prezzo?: number            // euro
   pagato: boolean
   dataPagamento?: string
   dataAcquisto: string
+  recuperi?: string[]        // 'abbonamento': lunedì (YYYY-MM-DD) delle settimane saltate rese recuperabili
   note?: string
   createdAt: string
 }
@@ -115,20 +146,56 @@ type Lezione = {
   id: string
   pacchettoId: string
   clienteId: string
+  disciplina: Disciplina     // uguale a quella del pacchetto
   data: string               // ISO datetime
   stato: 'fatta' | 'assente' // default 'fatta'
+  corsoId?: string           // presenza a un corso di gruppo
+  appuntamentoId?: string    // seduta individuale
+  note?: string
+  createdAt: string
+}
+
+type Corso = {               // gruppo che si ripete ogni settimana: solo yoga o posturale (mai fisio)
+  id: string
+  nome: string               // es. "Yoga sera"; facoltativo nel form: se vuoto "Yoga"/"Posturale"
+  disciplina: Disciplina
+  giorno: number             // 1 = lunedì … 7 = domenica
+  ora: string                // HH:mm
+  durataMinuti: number
+  attivo: boolean            // false = sospeso, non compare in agenda
+  iscritti: string[]         // clienteId del gruppo fisso
+  createdAt: string
+}
+
+type Appuntamento = {        // seduta individuale (fisio)
+  id: string
+  clienteId: string
+  disciplina: Disciplina
+  inizio: string             // ISO datetime
+  durataMinuti: number       // default 60
+  valutazione: boolean       // prima seduta = valutazione posturale
+  stato: 'programmato' | 'fatto' | 'assente' | 'annullato'
+  lezioneId?: string         // lezione registrata quando è fatto/assente
   note?: string
   createdAt: string
 }
 ```
 
 Regole derivate (funzioni pure in `src/lib/`, con unit test):
-- `residue = lezioniTotali - numero lezioni con stato 'fatta' del pacchetto`
-- Una nuova lezione scala dal **pacchetto più vecchio con residue > 0** (FIFO).
-- Se il cliente non ha pacchetti con residue, "Segna lezione" chiede di creare prima un pacchetto (non si va in negativo).
-- **Le assenze NON scalano lezioni.** Si registrano solo per storico (stato `'assente'`), non toccano le residue né il badge `x/y`.
-- Il calcolo delle residue sta in un'unica funzione (`src/lib/packages.ts`) così la regola futura si aggiunge in un solo punto.
-- Fase 2 (NON implementare ora): un'assenza va recuperata entro la settimana corrente, altrimenti la lezione viene scalata.
+- **Sedute**: `residue = lezioniTotali - numero lezioni con stato 'fatta' del pacchetto`. Se c'è una scadenza, dopo quella data il pacchetto è scaduto.
+- **Abbonamento**: copre le settimane (lunedì–domenica) tra `dataInizio` e `scadenza`; ogni settimana dà diritto a 1 lezione. Settimana con una lezione fatta = "fatta"; settimana passata senza lezione = **"persa"** (si recupera solo nella stessa settimana); le altre = "da fare". `residue` = settimane da fare. Scadenza di default: inizio + N mesi − 1 giorno (1/10 → 31/10).
+- **Settimana saltata recuperabile**: a discrezione della titolare, una settimana persa di un abbonamento ancora valido si rende recuperabile con un tocco ("Non farla perdere", con Annulla). Diventa "da recuperare" e conta nelle residue finché in una settimana **successiva** non c'è una seconda lezione, che la recupera ("recuperata"); se non è recuperata entro la scadenza torna persa. Con un recupero disponibile la seconda lezione della settimana non chiede conferma ("Recupera una settimana saltata"). Regola in `settimaneAbbonamento()`.
+- Una nuova lezione scala dal **pacchetto più vecchio con residue > 0 della stessa disciplina** (FIFO, ordine `dataInizio`).
+- Se il cliente non ha pacchetti con residue per quella disciplina, "Segna lezione" chiede di creare prima un pacchetto (non si va in negativo).
+- **Le assenze NON scalano le sedute.** Si registrano solo per storico (stato `'assente'`), non toccano le residue né il badge `x/y`. Negli abbonamenti un'assenza non recuperata in settimana fa perdere la settimana.
+- Il calcolo delle residue sta in un'unica funzione (`residue()` in `src/lib/packages.ts`).
+- **Le discipline del cliente sono automatiche**, non si scelgono a mano: si aggiungono quando il cliente entra in un gruppo (yoga/posturale), gli si fissa un appuntamento (fisio) o gli si vende un pacchetto; si tolgono quando esce dal gruppo, si annulla l'appuntamento o si elimina il pacchetto, se di quella disciplina non resta niente (gruppi, appuntamenti non annullati, pacchetti, lezioni). Regola in `disciplinaInUso()` (`src/lib/discipline.ts`). Quelle importate da Excel restano finché non vengono tolte da una di queste azioni.
+- I corsi di gruppo sono solo di yoga o posturale; la fisio è sempre individuale (appuntamenti).
+- Un pacchetto con lezioni registrate non si può eliminare.
+- Le occorrenze dei corsi non si salvano: si calcolano dal corso (giorno + ora). I presenti di un'occorrenza sono le lezioni con quel `corsoId` in quel giorno.
+- Presenze a un corso: solo dal giorno del corso in poi (non in anticipo). L'occorrenza mostra gli **iscritti fissi** con "Presente"/"Assente" a un tocco e "Tutti presenti" (salta chi non ha un abbonamento valido o è già venuto in un altro gruppo quella settimana; un solo Annulla per tutti, nessun WhatsApp). Chi cambia gruppo si aggiunge da "Da altri gruppi": la lezione conta normalmente. Se la settimana dell'abbonamento è già usata si chiede conferma ("Segna comunque"); se non c'è un abbonamento valido si propone "Nuovo pacchetto".
+- Iscritti fissi: si gestiscono dal corso (Altro → Corsi) o dalla scheda cliente (azione "Gruppo" e sezione "Gruppo fisso"). Nel "+" il corso proposto è il gruppo del cliente se si tiene oggi, altrimenti quello più vicino all'ora attuale.
+- Appuntamento "fatto" → crea la lezione (FIFO) e la collega; "assente" → lezione con stato `'assente'` (se c'è un pacchetto); "Rimetti da segnare" cancella la lezione. Un appuntamento passato ancora `programmato` è "da segnare".
 
 Fuori scope per ora: incassi, fatture, report economici. Non costruirli e non aggiungere tabelle per questi.
 
@@ -138,9 +205,9 @@ Funzioni pure in `src/lib/alerts.ts`, testate con date fittizie iniettate (mai `
 
 | Alert | Condizione | Priorità |
 |---|---|---|
-| Pacchetto esaurito | pacchetto più recente con residue = 0 e nessun pacchetto successivo | 1 |
+| Pacchetto esaurito / scaduto | pacchetto più recente della disciplina con residue = 0 o scaduto, e nessun pacchetto successivo | 1 |
 | Non pagato | qualsiasi pacchetto con `pagato = false` | 2 |
-| Da rinnovare | pacchetto più recente con residue 1 o 2 e nessun pacchetto successivo | 3 |
+| Da rinnovare / in scadenza | pacchetto più recente con residue 1 o 2 (sedute) o che scade entro **7 giorni**, e nessun pacchetto successivo | 3 |
 | Assente | cliente con residue > 0 e nessuna lezione negli ultimi 14 giorni | 4 |
 | Compleanno | compleanno tra oggi e i prossimi **3 giorni** inclusi | 5 |
 
@@ -156,17 +223,30 @@ Link: `https://wa.me/<numero senza +>?text=<testo url-encoded>`. Funzioni in `sr
 - Template riepilogo lezione:
   `Ciao {nome}! Lezione di oggi registrata ✅ Hai fatto {fatte} lezioni su {totali}, te ne restano {residue}.`
   Se residue ≤ 2 aggiungi: `Il pacchetto sta per finire, ne parliamo alla prossima lezione 😊`
+- Template riepilogo abbonamento: `Ciao {nome}! Lezione di oggi registrata ✅ Il tuo abbonamento {pacchetto} è valido fino al {scadenza}.` (+ avviso se scade entro 7 giorni)
 - Template auguri: `Tanti auguri {nome}! 🎉 Un abbraccio da Fisio Made.`
-- I template stanno in un unico file di costanti, così sono facili da modificare.
+- Template promemoria appuntamento: `Ciao {nome}! Ti ricordo l’appuntamento da Fisio Made {quando} alle {ora}. A presto!`
+- I template stanno in un unico file di costanti (`src/lib/messaggi.ts`), così sono facili da modificare.
 
 ## 8. UX e design
 
 - Mobile-first, layout pensato per 375px di larghezza. Testo base minimo 16px, target touch minimo 48px.
-- Navigazione in basso fissa: **Oggi · Clienti · [+] · Altro**. Il "+" centrale è "Segna lezione".
-- Azioni frequenti in massimo 2 tap. "Segna lezione": scegli cliente (con ricerca) → conferma.
-- Dopo "Segna lezione": toast con **"Annulla"** per 5 secondi, poi proposta di inviare il WhatsApp di riepilogo.
+- Navigazione in basso fissa: **Oggi · Agenda · [+] · Clienti · Altro**. Il "+" centrale è "Segna lezione".
+- Azioni frequenti in massimo 2 tap. "Segna lezione": scegli cliente (con ricerca) → tocca "Segna lezione di {disciplina}" (per yoga/posturale si aggancia al corso di oggi più vicino all'ora attuale, modificabile).
+- Dopo ogni lezione registrata (dal "+", da un corso o da un appuntamento): toast con **"Annulla"** per 5 secondi, poi proposta di inviare il WhatsApp di riepilogo (disabilitato senza telefono).
+- **Il più pulito possibile**: in ogni schermata solo l'essenziale. Campi secondari (email del cliente, note) nascosti dietro "+ Aggiungi …" (aperti se hanno già un valore). Le sezioni vuote non compaiono.
+- Agenda: settimana con giorni toccabili, per il giorno scelto corsi e appuntamenti in ordine di orario; "+ Appuntamento"; corsi gestiti da Altro → Corsi.
+- Scelta dell'orario (nuovo appuntamento, primo appuntamento del nuovo cliente, sposta): settimana da oggi in poi (giorni passati non selezionabili), per il giorno scelto gli **impegni già presi** (corsi attivi e appuntamenti non annullati, segnati "Occupato") e in mezzo gli **orari liberi** da toccare: ogni ora piena dentro l'orario dello studio (8–21) più subito dopo la fine e subito prima dell'inizio di un impegno, solo se l'appuntamento ci sta tutto e non è già passato. Logica in `src/lib/disponibilita.ts` (con test); in M6 si aggiungeranno gli impegni di Google come "Occupato". "Un altro orario" permette un orario a mano, con avviso (non bloccante) se si sovrappone a un appuntamento o a un corso.
+- Nuovo appuntamento: cliente, orario, "Valutazione posturale" (già spuntata se il cliente non ha pacchetti fisio), nota a richiesta. Sempre fisio: nessuna scelta di disciplina. Durata 60 minuti, modificabile solo da "Un altro orario".
 - Azioni distruttive (elimina, archivia) sempre con conferma.
-- Lista clienti: ricerca per nome/cognome, badge lezioni tipo `8/10`, badge colorato se c'è un alert.
+- Lista clienti: ricerca per nome/cognome, tab colorate per disciplina (Tutti · Fisio · Posturale · Yoga; un cliente con più discipline compare in ogni tab), un badge per disciplina con lo stato del pacchetto in uso (`Fisio 8/10` = fatte/totali, `Yoga al 31 ott` = scadenza), giallo se da rinnovare/in scadenza, rosso se esaurito/scaduto, più "Da pagare".
+- Nuovo cliente: Nome, Cognome, Telefono, Data di nascita; email e nota a richiesta. Niente consenso privacy nell'app (§11). **"Fissa il primo appuntamento"** apre la scelta dell'orario con gli impegni già segnati: si salva cliente + appuntamento (valutazione posturale, 1 ora) in un colpo ("Salva cliente e appuntamento"); "Non ora" lo toglie.
+- Scheda cliente: nome, discipline, tre azioni in alto **Appuntamento · Pacchetto · Gruppo**; poi, solo se non vuote, Prossimi appuntamenti, Pacchetti (in uso con avanzamento, pallini delle settimane per gli abbonamenti, "Segna pagato"; storico richiudibile), Gruppo fisso, "Lezioni fatte" (richiuse). In fondo i Dati (solo i campi compilati; se non ce n'è nessuno la sezione non c'è), "Modifica dati" e "Archivia cliente".
+- Abbonamenti: sulla card del pacchetto, per la settimana persa più recente, "Saltata la settimana del … · Non farla perdere"; nella pagina del pacchetto l'elenco delle settimane saltate con "Non farla perdere" / "Non recuperare". Pallini: fatta ✓, persa ✕, da recuperare ↻ (bordo tratteggiato), recuperata ✓.
+- Altro → **Esporta i dati**: "Scarica tutto in Excel" crea un file con i fogli Clienti, Pacchetti, Lezioni, Appuntamenti, Corsi, Prezzi (logica in `src/lib/esporta.ts`). Il foglio Clienti usa gli stessi titoli dell'import, quindi si può reimportare.
+- **Prezzi**: si vedono e si cambiano solo in Altro → Prezzi (il listino, prima voce di Altro). Nella scheda cliente, nei pacchetti del cliente e nella scelta del pacchetto non compaiono prezzi; il pacchetto venduto copia comunque il prezzo dal listino (resta nei dati).
+- Nuovo pacchetto: "Cosa ha comprato?" → voce del listino → solo "Dal", "Già pagato" e nota a richiesta (scadenza calcolata e mostrata come testo; data di acquisto e data di pagamento = oggi, senza campi). "Altro" per un pacchetto fuori listino: disciplina, tipo, numero di sedute o "Fino al"; il nome è automatico ("8 sedute fisio", "Abbonamento yoga"). Modifica: "Dal", "Fino al", sedute, pagato, nota.
+- Discipline: ogni disciplina ha un colore (token `fisio-*`, `posturale-*`, `yoga-*` in `tailwind.config`). Nel form cliente non si scelgono: nella scheda compaiono come etichette in sola lettura, aggiornate da gruppo fisso, appuntamenti e pacchetti.
 - Linguaggio semplice, niente termini tecnici. Date in formato italiano (`3 ott`, `03/10/2026`).
 - Palette: riprendere i colori di fisiomade.it. TODO: inserire i codici hex in `tailwind.config` come token `brand-*`. Fino ad allora usa token placeholder neutri, non colori inventati sparsi nel codice.
 - Supporto dark mode non richiesto.
@@ -179,8 +259,10 @@ src/
   features/
     oggi/
     clienti/
-    pacchetti/
+    pacchetti/    # listino, pacchetti del cliente
     lezioni/
+    agenda/       # agenda, corsi, appuntamenti
+    altro/        # import, listino, dati demo
   components/     # UI riutilizzabile (Button, Card, Badge, Toast, Sheet)
   data/
     types.ts
@@ -199,14 +281,16 @@ netlify.toml
 Si costruisce a moduli per poter mostrare alla titolare l'avanzamento passo per passo. Fai solo il modulo richiesto.
 
 - **M0 — Setup**: progetto Vite/React/TS/Tailwind, lint, Vitest, `netlify.toml`, layout con bottom nav (schermate vuote), livello dati con interfaccia + mock repository + seed, banner DEMO, "Reimposta dati demo".
-- **M1 — Clienti**: lista con ricerca, dettaglio cliente, crea/modifica/archivia, campo consenso privacy.
-- **M2 — Pacchetti**: crea pacchetto dal dettaglio cliente, segna pagato, calcolo residue, badge `x/y`, storico pacchetti.
-- **M3 — Segna lezione**: flusso dal "+", regola FIFO, toast Annulla, WhatsApp di riepilogo, storico lezioni nel dettaglio cliente. Nel dettaglio cliente pulsante secondario "Segna assenza" (non scala, compare nello storico con etichetta "Assenza"). Il flusso principale del "+" registra solo lezioni fatte.
-- **M4 — Oggi**: alert con priorità e pulsanti d'azione, auguri WhatsApp.
-- **M5 — Supabase**: migration SQL (tabelle, vincoli, indici), Row Level Security che consente accesso solo all'utente autenticato, login email+password, supabase repository, cambio di `VITE_DATA_MODE` in produzione. Il SQL va in `supabase/migrations/` e lo sviluppatore lo esegue a mano nel SQL editor.
-- **M6 — Rifinitura**: installazione PWA (icona, nome "Fisio Made"), stati vuoti, GitHub Actions per keep-alive di Supabase (ping ogni 3 giorni) e backup settimanale.
+- **M1 — Clienti**: lista con ricerca e tab per disciplina, dettaglio cliente, crea/modifica/archivia, discipline colorate, import clienti da Excel (vedi §12).
+- **M2 — Pacchetti e abbonamenti**: listino modificabile (Altro → Prezzi), nuovo pacchetto dal dettaglio cliente partendo dal listino, segna pagato, calcolo residue e settimane, scadenze con avvisi nella scheda, badge nella lista, storico pacchetti.
+- **M3 — Agenda e presenze**: corsi di gruppo settimanali (yoga, posturale) e sedute fisio individuali da 1 ora (la prima è la valutazione); vista agenda; segna presenza/assenza dall'agenda e dal "+"; regola FIFO per disciplina e regola settimanale; toast Annulla; WhatsApp di riepilogo; storico lezioni nel dettaglio cliente.
+- **M4 — Oggi**: alert con priorità e pulsanti d'azione, appuntamenti del giorno, auguri WhatsApp.
+- **M5 — Supabase**: migration SQL (tabelle, vincoli, indici), Row Level Security che consente accesso solo all'utente autenticato, login email+password, supabase repository, cambio di `VITE_DATA_MODE` in produzione. Il SQL va in `supabase/migrations/` e lo sviluppatore lo esegue a mano nel SQL editor. **Backup automatico settimanale** dei dati (copia cifrata; dove salvarla è da decidere: Drive della titolare o email). Solo dopo questo modulo si importano i clienti veri.
+- **M6 — Google Calendar**: sincronizzazione **bidirezionale** con un calendario dedicato "Fisio Made" nel Google della titolare (appuntamenti e corsi dall'app → Google; spostamenti e cancellazioni fatti su Google → app). Gli altri impegni del suo Google si leggono solo come "occupato" per evitare sovrapposizioni. Richiede Supabase (Edge Functions per OAuth e sync) e un progetto Google Cloud con OAuth.
+- ~~M7 — Valutazione posturale~~: **non si fa**. La valutazione (anamnesi, osservazioni, piano) la tiene la titolare per conto suo, fuori dall'app: niente scheda né PDF. Nell'app resta solo il segno "Valutazione" sull'appuntamento.
+- **M8 — Rifinitura**: installazione PWA (icona, nome "Fisio Made"), stati vuoti, GitHub Actions per keep-alive di Supabase (ping ogni 3 giorni). (Il backup si fa nel M5; l'esportazione Excel c'è già.)
 
-Fase 2 (non ora): schede di valutazione con export PDF, messaggi di auguri semi-automatici, regola di recupero assenze entro la settimana.
+Fase 2 (non ora): messaggi di auguri semi-automatici.
 
 ## 11. Sicurezza e privacy
 
@@ -214,3 +298,12 @@ Fase 2 (non ora): schede di valutazione con export PDF, messaggi di auguri semi-
 - RLS attiva su tutte le tabelle, nessuna tabella accessibile senza login. Registrazioni pubbliche disabilitate.
 - Nessun analytics o tracker di terze parti.
 - Nessun log in console di dati dei clienti.
+- **Niente dati sanitari nell'app**: niente consenso privacy, anamnesi, diagnosi o valutazioni. Nell'app solo dati anagrafici e organizzativi (nome, telefono, nascita, pacchetti, presenze, appuntamenti); la nota del cliente è per cose pratiche. Le informazioni cliniche la titolare le tiene fuori dall'app.
+
+## 12. Import clienti da Excel
+
+- Dentro l'app: Altro → "Importa da Excel" (anche dal fondo della lista Clienti). Il file viene letto sul telefono.
+- Il file reale **non va mai nel repo**, né in seed, test, screenshot o PR. Per un file disordinato lo sviluppatore può mandarlo a Claude in chat (prima togliendo colonne con informazioni sulla salute): Claude lo sistema e restituisce un `.xlsx` pulito, che poi si importa dall'app. I clienti veri si importano solo dopo il M5.
+- Formato `.xlsx`, primo foglio. La prima riga contiene i titoli delle colonne; obbligatorie **Nome** e **Cognome**, facoltative Telefono, Email, Data di nascita, Discipline, Note (sono riconosciuti anche sinonimi, es. Cellulare, Attività, Nato il). Le altre colonne (es. un vecchio "Consenso privacy") si ignorano e sono elencate nell'anteprima.
+- Prima di salvare c'è sempre un'anteprima: clienti da importare (con avvisi sui valori scartati), già presenti (stesso nome e cognome, saltati), righe non importabili.
+- Logica in `src/lib/importClienti.ts` (funzione pura, con test). File di esempio con dati finti: `public/esempio-clienti.xlsx`, scaricabile dalla schermata di import.

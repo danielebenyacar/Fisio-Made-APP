@@ -1,0 +1,497 @@
+import { useId, useState, type FormEvent } from 'react'
+import { useParams } from 'react-router-dom'
+import { useRepository } from '../../app/dataSource'
+import { useGoBack } from '../../app/useGoBack'
+import { BackButton } from '../../components/BackButton'
+import { Button } from '../../components/Button'
+import { Card } from '../../components/Card'
+import { CheckboxRow } from '../../components/CheckboxRow'
+import { ConfirmSheet } from '../../components/ConfirmSheet'
+import { DisciplinaPicker } from '../../components/DisciplinaPicker'
+import { DisciplinaPill } from '../../components/DisciplinaPill'
+import { DISCIPLINA_STYLE } from '../../components/disciplinaStyles'
+import { EmptyState } from '../../components/EmptyState'
+import { AggiungiButton, NotaField } from '../../components/CampoFacoltativo'
+import { TextField } from '../../components/fields'
+import { focusSoon } from '../../components/focusSoon'
+import { ChevronRightIcon } from '../../components/icons'
+import { PageTitle } from '../../components/PageTitle'
+import { SegmentedControl } from '../../components/SegmentedControl'
+import { TONE_STYLE } from '../../components/toneStyles'
+import type { Cliente, ModalitaPacchetto, Pacchetto, TipoPacchetto } from '../../data'
+import { DISCIPLINE } from '../../data'
+import { fullName } from '../../lib/clienti'
+import { formatDateIt, formatDateShort, toIsoDate } from '../../lib/dates'
+import { descriviTipo, MODALITA_LABEL } from '../../lib/listino'
+import {
+  conDataInizio,
+  formDaTipo,
+  pacchettoToForm,
+  validatePacchettoForm,
+  type PacchettoForm,
+  type PacchettoFormErrors,
+  type PacchettoFormValue,
+} from '../../lib/pacchettoForm'
+import { descriviAvanzamento, etichettaStato } from '../../lib/pacchettoLabel'
+import { aggiornaRecuperi, haSuccessivo, scadenzaDopoMesi, statoPacchetto } from '../../lib/packages'
+import { useCliente } from '../clienti/useClienti'
+import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
+import { SettimaneBar } from './SettimaneBar'
+import { useListino, usePacchetti } from './usePacchetti'
+
+/** /clienti/:id/pacchetti/nuovo and /clienti/:id/pacchetti/:pacchettoId */
+export function PacchettoFormPage() {
+  const { id, pacchettoId } = useParams()
+  const { cliente, error } = useCliente(id)
+  const goBack = useGoBack(`/clienti/${id}`)
+
+  if (error) return <EmptyState>Non riesco a caricare il cliente. Riprova tra poco.</EmptyState>
+  if (cliente === undefined) return null
+  if (cliente === null) {
+    return (
+      <>
+        <BackButton label="Indietro" onClick={goBack} />
+        <EmptyState>Cliente non trovato.</EmptyState>
+      </>
+    )
+  }
+  return pacchettoId ? (
+    <ModificaPacchetto cliente={cliente} pacchettoId={pacchettoId} goBack={goBack} />
+  ) : (
+    <NuovoPacchetto cliente={cliente} goBack={goBack} />
+  )
+}
+
+// --- New package: pick from the price list, then adjust -------------------
+
+function NuovoPacchetto({ cliente, goBack }: { cliente: Cliente; goBack: () => void }) {
+  const repository = useRepository()
+  const { aggiungi } = useDisciplineAutomatiche()
+  const { tipi } = useListino()
+  const [today] = useState(() => new Date())
+  const [form, setForm] = useState<PacchettoForm | null>(null)
+
+  async function save(value: PacchettoFormValue) {
+    await repository.createPacchetto({ ...value, clienteId: cliente.id })
+    // Selling a package of a discipline makes the client do that discipline.
+    await aggiungi(cliente.id, value.disciplina)
+    goBack()
+  }
+
+  if (!form) {
+    // The client's own disciplines first.
+    const order = [...cliente.discipline, ...DISCIPLINE.filter((d) => !cliente.discipline.includes(d))]
+    const active = (tipi ?? []).filter((t) => t.attivo)
+    return (
+      <>
+        <BackButton label="Annulla" onClick={goBack} />
+        <PageTitle>Nuovo pacchetto</PageTitle>
+        <p className="mt-1 text-brand-600">per {fullName(cliente)}</p>
+        <p className="mt-4 font-semibold">Cosa ha comprato?</p>
+        {tipi === undefined ? null : (
+          <div className="mt-2 flex flex-col gap-2">
+            {order.flatMap((d) =>
+              active
+                .filter((t) => t.disciplina === d)
+                .map((tipo) => <TipoButton key={tipo.id} tipo={tipo} onClick={() => setForm(formDaTipo(tipo, today))} />),
+            )}
+            <button
+              type="button"
+              onClick={() => setForm(formDaTipo(null, today))}
+              className="flex min-h-16 items-center gap-3 rounded-2xl border-2 border-dashed border-brand-300 px-4 py-3 text-left active:bg-brand-100"
+            >
+              <span className="flex-1">
+                <span className="block font-semibold">Altro</span>
+                <span className="text-brand-600">Un pacchetto diverso da questi</span>
+              </span>
+              <ChevronRightIcon className="shrink-0 text-brand-400" />
+            </button>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  const tipo = tipi?.find((t) => t.id === form.tipoId)
+  return (
+    <>
+      <BackButton label="Cambia pacchetto" onClick={() => setForm(null)} />
+      <PageTitle>{tipo?.nome ?? 'Nuovo pacchetto'}</PageTitle>
+      <p className="mt-1 text-brand-600">per {fullName(cliente)}</p>
+      {tipo && (
+        <p className="mt-3 flex flex-wrap items-center gap-2">
+          <DisciplinaPill disciplina={tipo.disciplina} />
+          <span className="text-brand-700">{descriviTipo(tipo)}</span>
+        </p>
+      )}
+      <PacchettoFields
+        form={form}
+        onChange={setForm}
+        today={today}
+        modo={tipo ? 'listino' : 'altro'}
+        submitLabel="Salva pacchetto"
+        onSubmit={save}
+        onCancel={goBack}
+      />
+    </>
+  )
+}
+
+function TipoButton({ tipo, onClick }: { tipo: TipoPacchetto; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-16 items-center gap-3 rounded-2xl border-l-4 bg-white px-4 py-3 text-left shadow-sm active:bg-brand-100 ${DISCIPLINA_STYLE[tipo.disciplina].accent}`}
+    >
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-semibold">{tipo.nome}</span>
+        <span className="text-brand-600">{descriviTipo(tipo)}</span>
+      </span>
+      <ChevronRightIcon className="shrink-0 text-brand-400" />
+    </button>
+  )
+}
+
+// --- Edit an existing package ---------------------------------------------
+
+function ModificaPacchetto({
+  cliente,
+  pacchettoId,
+  goBack,
+}: {
+  cliente: Cliente
+  pacchettoId: string
+  goBack: () => void
+}) {
+  const { pacchetti, lezioni, error, reload } = usePacchetti({ clienteId: cliente.id })
+  const [today] = useState(() => new Date())
+
+  if (error) return <EmptyState>Non riesco a caricare il pacchetto. Riprova tra poco.</EmptyState>
+  if (!pacchetti || !lezioni) return null
+  const pacchetto = pacchetti.find((p) => p.id === pacchettoId)
+  if (!pacchetto) {
+    return (
+      <>
+        <BackButton label="Indietro" onClick={goBack} />
+        <EmptyState>Pacchetto non trovato.</EmptyState>
+      </>
+    )
+  }
+  const lessonCount = lezioni.filter((l) => l.pacchettoId === pacchetto.id).length
+  return (
+    <ModificaPacchettoForm
+      key={pacchetto.id}
+      pacchetto={pacchetto}
+      cliente={cliente}
+      lessonCount={lessonCount}
+      stato={statoPacchetto(pacchetto, lezioni, today)}
+      rinnovato={haSuccessivo(pacchetto, pacchetti)}
+      today={today}
+      goBack={goBack}
+      onRecuperiChange={reload}
+    />
+  )
+}
+
+function ModificaPacchettoForm({
+  pacchetto,
+  cliente,
+  lessonCount,
+  stato,
+  rinnovato,
+  today,
+  goBack,
+  onRecuperiChange,
+}: {
+  pacchetto: Pacchetto
+  cliente: Cliente
+  lessonCount: number
+  stato: ReturnType<typeof statoPacchetto>
+  rinnovato: boolean
+  today: Date
+  goBack: () => void
+  onRecuperiChange: () => void
+}) {
+  const repository = useRepository()
+  const { rimuoviSeNonUsata } = useDisciplineAutomatiche()
+  const [form, setForm] = useState(() => pacchettoToForm(pacchetto))
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState(false)
+  const etichetta = etichettaStato(pacchetto, stato, rinnovato)
+
+  async function save(value: PacchettoFormValue) {
+    await repository.updatePacchetto(pacchetto.id, value)
+    goBack()
+  }
+
+  // Skipped weeks of a subscription still in use: each can be kept valid (or not) with one tap.
+  const saltate = stato.scaduto ? [] : stato.settimane.filter((w) => w.stato !== 'fatta' && w.stato !== 'da-fare')
+  async function setRecupero(inizio: string, valida: boolean) {
+    await repository.updatePacchetto(pacchetto.id, { recuperi: aggiornaRecuperi(pacchetto.recuperi, inizio, valida) })
+    onRecuperiChange()
+  }
+
+  async function remove() {
+    setConfirmDelete(false)
+    try {
+      await repository.deletePacchetto(pacchetto.id)
+      await rimuoviSeNonUsata(cliente.id, pacchetto.disciplina)
+      goBack()
+    } catch {
+      setDeleteError(true)
+    }
+  }
+
+  return (
+    <>
+      <BackButton label="Indietro" onClick={goBack} />
+      <PageTitle>{pacchetto.nome}</PageTitle>
+      <p className="mt-1 text-brand-600">di {fullName(cliente)}</p>
+
+      <Card className="mt-4">
+        <div className="flex items-center gap-2">
+          <DisciplinaPill disciplina={pacchetto.disciplina} />
+          <span className="font-semibold text-brand-700">{MODALITA_LABEL[pacchetto.modalita]}</span>
+        </div>
+        {etichetta && (
+          <p className={`mt-3 inline-block rounded-full border px-2.5 py-0.5 font-semibold ${TONE_STYLE[etichetta.tono]}`}>
+            {etichetta.testo}
+          </p>
+        )}
+        <p className="mt-2 text-brand-700">{descriviAvanzamento(pacchetto, stato)}</p>
+        {stato.settimane.length > 0 && (
+          <div className="mt-2">
+            <SettimaneBar settimane={stato.settimane} disciplina={pacchetto.disciplina} />
+          </div>
+        )}
+        {saltate.length > 0 && (
+          <ul aria-label="Settimane saltate" className="mt-3 divide-y divide-brand-100 border-t border-brand-100">
+            {saltate.map((w) => (
+              <li key={w.inizio} className="flex min-h-12 flex-wrap items-center justify-between gap-x-3">
+                <span>
+                  Settimana del {formatDateShort(w.inizio)}:{' '}
+                  {w.stato === 'persa' ? 'persa' : w.stato === 'da-recuperare' ? 'da recuperare' : 'recuperata'}
+                </span>
+                {w.stato === 'persa' && (
+                  <button type="button" onClick={() => setRecupero(w.inizio, true)} className="min-h-12 font-semibold underline">
+                    Non farla perdere
+                  </button>
+                )}
+                {w.stato === 'da-recuperare' && (
+                  <button type="button" onClick={() => setRecupero(w.inizio, false)} className="min-h-12 font-semibold underline">
+                    Non recuperare
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <PacchettoFields
+        form={form}
+        onChange={setForm}
+        today={today}
+        modo="modifica"
+        submitLabel="Salva modifiche"
+        onSubmit={save}
+        onCancel={goBack}
+      />
+
+      <div className="mt-8 border-t border-brand-200 pt-6">
+        {lessonCount === 0 ? (
+          <Button variant="secondary" onClick={() => setConfirmDelete(true)}>
+            Elimina pacchetto
+          </Button>
+        ) : (
+          <p className="text-brand-600">
+            Ha {lessonCount === 1 ? '1 lezione registrata' : `${lessonCount} lezioni registrate`}: non si può
+            eliminare.
+          </p>
+        )}
+        {deleteError && (
+          <p role="alert" className="mt-2 font-semibold text-danger-700">
+            Non sono riuscito a eliminarlo. Riprova.
+          </p>
+        )}
+      </div>
+
+      <ConfirmSheet
+        open={confirmDelete}
+        title="Eliminare il pacchetto?"
+        message={`“${pacchetto.nome}” verrà tolto da ${fullName(cliente)}. Usalo solo per un pacchetto inserito per errore.`}
+        confirmLabel="Elimina"
+        onConfirm={remove}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </>
+  )
+}
+
+// --- Shared fields ----------------------------------------------------------
+
+const MODALITA_OPTIONS = (['sedute', 'abbonamento'] as ModalitaPacchetto[]).map((value) => ({
+  value,
+  label: MODALITA_LABEL[value],
+}))
+
+type FieldsProps = {
+  form: PacchettoForm
+  onChange: (form: PacchettoForm) => void
+  today: Date
+  /**
+   * listino: new package from the price list, everything prefilled;
+   * altro: new package not in the price list; modifica: an existing package.
+   */
+  modo: 'listino' | 'altro' | 'modifica'
+  submitLabel: string
+  onSubmit: (value: PacchettoFormValue) => Promise<void>
+  onCancel: () => void
+}
+
+/** Only what is needed: when it starts, until when, sessions, paid. Price and name come from the price list. */
+function PacchettoFields({ form, onChange, today, modo, submitLabel, onSubmit, onCancel }: FieldsProps) {
+  const ids = useId()
+  const fieldId = (name: string) => `${ids}-${name}`
+  const [errors, setErrors] = useState<PacchettoFormErrors>({})
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  // An end date for sessions only when there is one already or it is asked for.
+  const [showScadenza, setShowScadenza] = useState(form.scadenza !== '')
+  const todayIso = toIsoDate(today)
+  const abbonamento = form.modalita === 'abbonamento'
+
+  const update = (next: PacchettoForm, field?: keyof PacchettoFormErrors) => {
+    onChange(next)
+    if (field) setErrors((e) => ({ ...e, [field]: undefined }))
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    const result = validatePacchettoForm(form, today)
+    if (!result.ok) {
+      setErrors(result.errors)
+      return
+    }
+    setSaving(true)
+    try {
+      await onSubmit(result.value)
+    } catch {
+      setSaving(false)
+      setSaveError(true)
+    }
+  }
+
+  return (
+    <form noValidate onSubmit={handleSubmit} className="mt-5 flex flex-col gap-5">
+      {modo === 'altro' && (
+        <>
+          <div>
+            <p id={fieldId('disciplina')} className="mb-1.5 font-semibold">
+              Disciplina *
+            </p>
+            <DisciplinaPicker
+              value={form.disciplina}
+              onChange={(disciplina) => update({ ...form, disciplina }, 'disciplina')}
+              labelledBy={fieldId('disciplina')}
+            />
+            {errors.disciplina && <p className="mt-1.5 font-semibold text-danger-700">{errors.disciplina}</p>}
+          </div>
+          <div>
+            <p id={fieldId('modalita')} className="mb-1.5 font-semibold">
+              Tipo
+            </p>
+            <SegmentedControl
+              value={form.modalita}
+              options={MODALITA_OPTIONS}
+              onChange={(modalita) =>
+                update({
+                  ...form,
+                  modalita,
+                  // A subscription needs an end: propose one month, it can be changed.
+                  scadenza:
+                    modalita === 'sedute'
+                      ? showScadenza
+                        ? form.scadenza
+                        : ''
+                      : form.scadenza ||
+                        (/^\d{4}-\d{2}-\d{2}$/.test(form.dataInizio) ? scadenzaDopoMesi(form.dataInizio, 1) : ''),
+                })
+              }
+              labelledBy={fieldId('modalita')}
+            />
+          </div>
+        </>
+      )}
+
+      {!abbonamento && modo !== 'listino' && (
+        <TextField
+          id={fieldId('lezioni')}
+          label="Numero di sedute *"
+          inputMode="numeric"
+          value={form.lezioni}
+          onChange={(e) => update({ ...form, lezioni: e.target.value }, 'lezioni')}
+          error={errors.lezioni}
+        />
+      )}
+
+      <TextField
+        id={fieldId('dataInizio')}
+        label="Dal *"
+        type="date"
+        value={form.dataInizio}
+        onChange={(e) => update(conDataInizio(form, e.target.value), 'dataInizio')}
+        error={errors.dataInizio}
+      />
+
+      {modo === 'listino' ? (
+        // From the price list the end follows the start date.
+        form.scadenza && <p className="-mt-2 font-semibold text-brand-700">Valido fino al {formatDateIt(form.scadenza)}</p>
+      ) : abbonamento || showScadenza ? (
+        <TextField
+          id={fieldId('scadenza')}
+          label={abbonamento ? 'Fino al *' : 'Fino al'}
+          type="date"
+          min={form.dataInizio}
+          value={form.scadenza}
+          onChange={(e) => update({ ...form, scadenza: e.target.value }, 'scadenza')}
+          error={errors.scadenza}
+        />
+      ) : (
+        <AggiungiButton
+          onClick={() => {
+            setShowScadenza(true)
+            focusSoon(fieldId('scadenza'))
+          }}
+        >
+          Aggiungi una scadenza
+        </AggiungiButton>
+      )}
+
+      <CheckboxRow
+        checked={form.pagato}
+        onChange={(pagato) => update({ ...form, pagato, dataPagamento: pagato ? form.dataPagamento || todayIso : '' })}
+      >
+        Già pagato
+      </CheckboxRow>
+
+      <NotaField value={form.note} onChange={(note) => update({ ...form, note })} />
+
+      {saveError && (
+        <p role="alert" className="font-semibold text-danger-700">
+          Non sono riuscito a salvare. Riprova.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-3">
+        <Button type="submit" disabled={saving}>
+          {submitLabel}
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Annulla
+        </Button>
+      </div>
+    </form>
+  )
+}
