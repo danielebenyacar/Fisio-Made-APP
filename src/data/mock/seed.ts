@@ -1,5 +1,5 @@
 import { addDays, getISODay, setHours, startOfDay, subDays } from 'date-fns'
-import { dataOra } from '../../lib/agenda'
+import { dataOra, inizioSettimana } from '../../lib/agenda'
 import { disciplineInUso, sortDiscipline } from '../../lib/discipline'
 import { toIsoDate } from '../../lib/dates'
 import { scadenzaDopoMesi } from '../../lib/packages'
@@ -87,6 +87,8 @@ type PacchettoSeed = {
   fatte?: number[]
   /** Days ago of each lesson with stato 'assente'. */
   assenze?: number[]
+  /** Days ago inside skipped weeks the owner kept valid (subscriptions). */
+  recuperi?: number[]
 }
 
 type ClienteSeed = {
@@ -98,7 +100,6 @@ type ClienteSeed = {
   /** [days from today, age]. Ages are multiples of 4 so Feb 29 stays valid. */
   compleanno?: [number, number]
   note?: string
-  senzaConsenso?: true
   archiviato?: boolean
   pacchetti: PacchettoSeed[]
 }
@@ -173,13 +174,13 @@ const CLIENTI: ClienteSeed[] = [
     pacchetti: [{ tipo: 'posturaleMese', iniziatoGiorniFa: 26, fatte: every(7, 3, 9) }],
   },
   {
-    // Compleanno tra 2 giorni.
+    // Compleanno tra 2 giorni. Skipped a week two weeks ago, kept valid: one lesson to recover.
     nome: 'Sara',
     cognome: 'Greco',
     discipline: ['yoga'],
     telefono: '+393000000107',
     compleanno: [2, 28],
-    pacchetti: [{ tipo: 'yogaTrimestre', iniziatoGiorniFa: 25, fatte: every(7, 4, 1) }],
+    pacchetti: [{ tipo: 'yogaTrimestre', iniziatoGiorniFa: 25, fatte: [22, 8, 1], recuperi: [15] }],
   },
   {
     // Compleanno tra 3 giorni.
@@ -263,7 +264,7 @@ const CLIENTI: ClienteSeed[] = [
     discipline: ['fisio', 'posturale', 'yoga'],
     telefono: '+393000000115',
     compleanno: [180, 52],
-    note: 'Lombalgia cronica, evitare carichi.',
+    note: 'Preferisce il pomeriggio, avvisare se si sposta.',
     pacchetti: [
       { tipo: 'fisio10', iniziatoGiorniFa: 62, fatte: every(4, 10, 24) },
       { tipo: 'fisio10', iniziatoGiorniFa: 21, fatte: every(3, 6, 3) },
@@ -271,11 +272,10 @@ const CLIENTI: ClienteSeed[] = [
     ],
   },
   {
-    // No discipline and no package yet; privacy consent still to sign.
+    // No package yet: only the booked assessment.
     nome: 'Paolo',
     cognome: 'Lombardi',
     discipline: [],
-    senzaConsenso: true,
     telefono: '+393000000116',
     pacchetti: [],
   },
@@ -330,11 +330,9 @@ export function createSeed(now: Date): DemoData {
       nome: seed.nome,
       cognome: seed.cognome,
       discipline: seed.discipline,
-      consensoPrivacy: !seed.senzaConsenso,
       archiviato: seed.archiviato ?? false,
       createdAt: createdAt.toISOString(),
     }
-    if (!seed.senzaConsenso) cliente.consensoData = toIsoDate(createdAt)
     if (seed.telefono) cliente.telefono = seed.telefono
     if (seed.email) cliente.email = seed.email
     if (seed.note) cliente.note = seed.note
@@ -366,6 +364,7 @@ export function createSeed(now: Date): DemoData {
       if (tipo.modalita === 'sedute') pacchetto.lezioniTotali = tipo.lezioni
       if (tipo.durataMesi) pacchetto.scadenza = scadenzaDopoMesi(dataInizio, tipo.durataMesi)
       if (pacchetto.pagato) pacchetto.dataPagamento = dataInizio
+      if (p.recuperi) pacchetto.recuperi = p.recuperi.map((d) => toIsoDate(inizioSettimana(daysAgo(d))))
       data.pacchetti.push(pacchetto)
 
       const lezioni = [
@@ -391,7 +390,7 @@ export function createSeed(now: Date): DemoData {
           createdAt: when,
         }
         if (corso) lezione.corsoId = corso.id
-        if (stato === 'assente') lezione.note = 'Ha avvisato: influenza.'
+        if (stato === 'assente') lezione.note = 'Ha avvisato.'
         if (pacchetto.disciplina === 'fisio') {
           const appuntamento = addAppuntamento({
             clienteId: cliente.id,

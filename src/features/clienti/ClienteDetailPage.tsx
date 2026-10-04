@@ -8,7 +8,7 @@ import { ButtonLink } from '../../components/ButtonLink'
 import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { DisciplinaPills } from '../../components/DisciplinaPill'
 import { EmptyState } from '../../components/EmptyState'
-import { AlertIcon, CalendarIcon, CheckIcon, TicketIcon, UsersIcon } from '../../components/icons'
+import { CalendarIcon, TicketIcon, UsersIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import type { Cliente } from '../../data'
 import { fullName } from '../../lib/clienti'
@@ -70,6 +70,7 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [saveError, setSaveError] = useState(false)
   const [scegliGruppo, setScegliGruppo] = useState(false)
+  const haDati = Boolean(cliente.telefono || cliente.email || cliente.dataNascita || cliente.note)
 
   async function save(patch: Partial<Cliente>): Promise<boolean> {
     const previous = cliente
@@ -145,49 +146,40 @@ function ClienteDetail({ cliente, today, onChange, goBack }: DetailProps) {
         </>
       )}
 
-      <h2 className="mt-8 mb-2 text-xl font-bold">Dati</h2>
-      <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">
-        {cliente.telefono && (
-          <Row label="Telefono">
-            <a href={`tel:${cliente.telefono}`} className="text-brand-900 underline">
-              {formatPhone(cliente.telefono)}
-            </a>
-          </Row>
-        )}
-        {cliente.email && (
-          <Row label="Email">
-            <a href={`mailto:${cliente.email}`} className="break-all text-brand-900 underline">
-              {cliente.email}
-            </a>
-          </Row>
-        )}
-        {cliente.dataNascita && (
-          <Row label="Nascita">
-            {formatDateIt(cliente.dataNascita)} · {ageOn(cliente.dataNascita, today)} anni
-          </Row>
-        )}
-        <Row label="Privacy">
-          {cliente.consensoPrivacy ? (
-            <span className="inline-flex items-center gap-1.5">
-              <CheckIcon width={20} height={20} strokeWidth={3} className="text-posturale-700" />
-              Firmata{cliente.consensoData && ` il ${formatDateIt(cliente.consensoData)}`}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-danger-700">
-              <AlertIcon width={20} height={20} />
-              Da far firmare
-            </span>
-          )}
-        </Row>
-        {cliente.note && (
-          <div className="py-3">
-            <dt className="text-brand-600">Nota</dt>
-            <dd className="mt-0.5 whitespace-pre-line">{cliente.note}</dd>
-          </div>
-        )}
-      </dl>
+      {haDati && (
+        <>
+          <h2 className="mt-8 mb-2 text-xl font-bold">Dati</h2>
+          <dl className="divide-y divide-brand-200 rounded-2xl bg-white px-4 shadow-sm">
+            {cliente.telefono && (
+              <Row label="Telefono">
+                <a href={`tel:${cliente.telefono}`} className="text-brand-900 underline">
+                  {formatPhone(cliente.telefono)}
+                </a>
+              </Row>
+            )}
+            {cliente.email && (
+              <Row label="Email">
+                <a href={`mailto:${cliente.email}`} className="break-all text-brand-900 underline">
+                  {cliente.email}
+                </a>
+              </Row>
+            )}
+            {cliente.dataNascita && (
+              <Row label="Nascita">
+                {formatDateIt(cliente.dataNascita)} · {ageOn(cliente.dataNascita, today)} anni
+              </Row>
+            )}
+            {cliente.note && (
+              <div className="py-3">
+                <dt className="text-brand-600">Nota</dt>
+                <dd className="mt-0.5 whitespace-pre-line">{cliente.note}</dd>
+              </div>
+            )}
+          </dl>
+        </>
+      )}
 
-      <div className="mt-4 flex flex-col gap-2">
+      <div className={`${haDati ? 'mt-4' : 'mt-8'} flex flex-col gap-2`}>
         <ButtonLink to={`/clienti/${cliente.id}/modifica`} variant="secondary">
           Modifica dati
         </ButtonLink>

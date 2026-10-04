@@ -20,7 +20,7 @@ import {
   type ClienteForm,
   type ClienteFormErrors,
 } from '../../lib/clienti'
-import { formatDateIt, toIsoDate } from '../../lib/dates'
+import { toIsoDate } from '../../lib/dates'
 import { ScegliOrario } from '../agenda/ScegliOrario'
 import { useCliente } from './useClienti'
 
@@ -45,7 +45,7 @@ export function ClienteFormPage() {
 }
 
 // Order in which the first invalid field gets focus.
-const FIELD_ORDER: (keyof ClienteFormErrors)[] = ['nome', 'cognome', 'telefono', 'dataNascita', 'consensoData', 'email']
+const FIELD_ORDER: (keyof ClienteFormErrors)[] = ['nome', 'cognome', 'telefono', 'dataNascita', 'email']
 
 function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () => void }) {
   const repository = useRepository()
@@ -61,7 +61,6 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
   const [saveError, setSaveError] = useState(false)
   // Secondary fields stay hidden until asked for (or already filled).
   const [showEmail, setShowEmail] = useState(form.email !== '')
-  const [showConsensoData, setShowConsensoData] = useState(false)
   // New client only: book the first appointment right away, seeing when there is time.
   const [primo, setPrimo] = useState<{ giorno: string; ora: string; valutazione: boolean } | null>(null)
   const conAppuntamento = primo !== null && /^\d{2}:\d{2}$/.test(primo.ora)
@@ -78,7 +77,6 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
       setErrors(result.errors)
       const first = FIELD_ORDER.find((f) => result.errors[f])
       if (first === 'email') setShowEmail(true)
-      if (first === 'consensoData') setShowConsensoData(true)
       if (first) focusSoon(fieldId(first))
       return
     }
@@ -154,44 +152,6 @@ function ClienteFormView({ cliente, goBack }: { cliente?: Cliente; goBack: () =>
           onChange={(e) => set('dataNascita', e.target.value)}
           error={errors.dataNascita}
         />
-
-        <div className="flex flex-col gap-3">
-          <CheckboxRow
-            checked={form.consensoPrivacy}
-            onChange={(checked) => {
-              set('consensoPrivacy', checked)
-              if (checked && !form.consensoData) set('consensoData', todayIso)
-            }}
-          >
-            Consenso privacy firmato
-          </CheckboxRow>
-          {form.consensoPrivacy &&
-            (showConsensoData ? (
-              <TextField
-                id={fieldId('consensoData')}
-                label="Data del consenso"
-                type="date"
-                max={todayIso}
-                value={form.consensoData}
-                onChange={(e) => set('consensoData', e.target.value)}
-                error={errors.consensoData}
-              />
-            ) : (
-              <p className="text-brand-700">
-                Firmato il {formatDateIt(form.consensoData || todayIso)} ·{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowConsensoData(true)
-                    focusSoon(fieldId('consensoData'))
-                  }}
-                  className="min-h-12 font-semibold underline"
-                >
-                  Cambia data
-                </button>
-              </p>
-            ))}
-        </div>
 
         <div className="flex flex-col gap-2">
           {showEmail ? (

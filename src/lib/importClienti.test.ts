@@ -5,7 +5,7 @@ import type { Cliente } from '../data/types'
 import { analyzeImport, type Cell } from './importClienti'
 
 const TODAY = new Date(2026, 9, 1, 10, 0)
-const HEADER: Cell[] = ['Nome', 'Cognome', 'Telefono', 'Email', 'Data di nascita', 'Discipline', 'Note', 'Consenso privacy']
+const HEADER: Cell[] = ['Nome', 'Cognome', 'Telefono', 'Email', 'Data di nascita', 'Discipline', 'Note']
 
 const existing: Cliente[] = [
   {
@@ -13,7 +13,6 @@ const existing: Cliente[] = [
     nome: 'Giulia',
     cognome: 'Bianchi',
     discipline: ['fisio'],
-    consensoPrivacy: true,
     archiviato: false,
     createdAt: '2026-01-01T10:00:00.000Z',
   },
@@ -29,7 +28,7 @@ describe('analyzeImport', () => {
   it('maps a full row to a client', () => {
     const result = analyze([
       HEADER,
-      ['Laura', 'Ferri', '333 123 4567', 'laura@example.com', new Date(Date.UTC(1988, 2, 14)), 'Fisio, Yoga', 'Cervicale', 'Sì'],
+      ['Laura', 'Ferri', '333 123 4567', 'laura@example.com', new Date(Date.UTC(1988, 2, 14)), 'Fisio, Yoga', 'Preferisce la sera'],
     ])
     expect(result.daImportare).toEqual([
       {
@@ -42,8 +41,7 @@ describe('analyzeImport', () => {
           email: 'laura@example.com',
           dataNascita: '1988-03-14',
           discipline: ['fisio', 'yoga'],
-          note: 'Cervicale',
-          consensoPrivacy: true,
+          note: 'Preferisce la sera',
         },
       },
     ])
@@ -51,8 +49,8 @@ describe('analyzeImport', () => {
 
   it('recognizes alternative column titles in any order', () => {
     const result = analyze([
-      ['Cellulare', 'COGNOME', 'E-mail', 'nome', 'Attività', 'Nato il', 'Privacy'],
-      [3331234567, 'Neri', 'n@example.com', 'Paola', 'posturale', '05/06/1970', true],
+      ['Cellulare', 'COGNOME', 'E-mail', 'nome', 'Attività', 'Nato il'],
+      [3331234567, 'Neri', 'n@example.com', 'Paola', 'posturale', '05/06/1970'],
     ])
     expect(result.daImportare[0].cliente).toEqual({
       nome: 'Paola',
@@ -61,7 +59,6 @@ describe('analyzeImport', () => {
       email: 'n@example.com',
       dataNascita: '1970-06-05',
       discipline: ['posturale'],
-      consensoPrivacy: true,
     })
     expect(result.colonneIgnorate).toEqual([])
   })
@@ -103,9 +100,9 @@ describe('analyzeImport', () => {
   it('drops invalid optional values with a warning', () => {
     const [row] = analyze([
       HEADER,
-      ['Anna', 'Neri', 'boh', 'anna@example', '31/02/1990', '', '', 'No'],
+      ['Anna', 'Neri', 'boh', 'anna@example', '31/02/1990', '', ''],
     ]).daImportare
-    expect(row.cliente).toEqual({ nome: 'Anna', cognome: 'Neri', discipline: [], consensoPrivacy: false })
+    expect(row.cliente).toEqual({ nome: 'Anna', cognome: 'Neri', discipline: [] })
     expect(row.avvisi).toEqual([
       'telefono "boh" non valido, non importato',
       'email "anna@example" non valida, non importata',
@@ -113,14 +110,10 @@ describe('analyzeImport', () => {
     ])
   })
 
-  it('reads consent as yes/no, a date or a checkbox', () => {
-    const consent = (cell: Cell) => analyze([HEADER, ['A', 'B', null, null, null, null, null, cell]]).daImportare[0].cliente
-    expect(consent('x')).toMatchObject({ consensoPrivacy: true })
-    expect(consent('no')).toMatchObject({ consensoPrivacy: false })
-    expect(consent(null)).toMatchObject({ consensoPrivacy: false })
-    expect(consent(false)).toMatchObject({ consensoPrivacy: false })
-    expect(consent('15/01/2026')).toMatchObject({ consensoPrivacy: true, consensoData: '2026-01-15' })
-    expect(consent(new Date(Date.UTC(2026, 0, 15)))).toMatchObject({ consensoData: '2026-01-15' })
+  it('ignores an old privacy consent column', () => {
+    const result = analyze([[...HEADER, 'Consenso privacy'], ['A', 'B', null, null, null, null, null, 'Sì']])
+    expect(result.colonneIgnorate).toEqual(['Consenso privacy'])
+    expect(result.daImportare[0].cliente).toEqual({ nome: 'A', cognome: 'B', discipline: [] })
   })
 
   it('reads birth dates stored as Excel serial numbers', () => {
@@ -152,7 +145,6 @@ describe('public/esempio-clienti.xlsx', () => {
     expect(byName('Roberto').cliente.telefono).toBeUndefined()
     expect(byName('Marco').cliente.telefono).toBe('+393000000206')
     expect(byName('Anna').cliente).toMatchObject({ telefono: '+393000000203', dataNascita: '1990-04-12' })
-    expect(byName('Elisa').cliente.consensoPrivacy).toBe(false)
     expect(byName('Elisa').avvisi).toHaveLength(1)
     for (const row of result.daImportare) expect(row.cliente.telefono ?? '').toMatch(/^(\+39300\d{7})?$/)
   })

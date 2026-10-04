@@ -164,6 +164,11 @@ function DisciplinaRiga({ disciplina, cliente, pacchetti, lezioni, corsi, now, o
         <>
           <p className="mt-2 font-semibold">{scelta.pacchetto.nome}</p>
           <p className="text-brand-600">{descriviAvanzamento(scelta.pacchetto, statoPacchetto(scelta.pacchetto, lezioni, now))}</p>
+          {scelta.tipo === 'ok' && scelta.recupero && (
+            <p className={`mt-3 inline-block rounded-full border px-2.5 py-0.5 font-semibold ${TONE_STYLE.ok}`}>
+              Recupera una settimana saltata
+            </p>
+          )}
           {scelta.tipo === 'settimana-gia-usata' && (
             <p className={`mt-3 inline-block rounded-full border px-2.5 py-0.5 font-semibold ${TONE_STYLE.avviso}`}>
               Lezione della settimana già fatta

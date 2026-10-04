@@ -44,16 +44,19 @@ function etichettaBase(pacchetto: Pacchetto, stato: StatoPacchetto): Etichetta |
   return null
 }
 
-/** "8 di 10 fatte · ne restano 2" or "Dal 1 ott al 31 ott · 2 fatte, 1 persa, 2 da fare". */
+/** "8 di 10 fatte · ne restano 2" or "Dal 1 ott al 31 ott · 2 fatte, 1 persa, 1 da recuperare, 2 da fare". */
 export function descriviAvanzamento(pacchetto: Pacchetto, stato: StatoPacchetto): string {
   if (pacchetto.modalita === 'sedute') {
     const restano = stato.residue === 1 ? 'ne resta 1' : `ne restano ${stato.residue}`
     return `${stato.fatte} di ${stato.totali} fatte · ${restano}`
   }
   const count = (s: string) => stato.settimane.filter((w) => w.stato === s).length
+  const fatte = count('fatta') + count('recuperata')
   const perse = count('persa')
-  const parts = [`${count('fatta')} ${count('fatta') === 1 ? 'fatta' : 'fatte'}`]
+  const daRecuperare = count('da-recuperare')
+  const parts = [`${fatte} ${fatte === 1 ? 'fatta' : 'fatte'}`]
   if (perse > 0) parts.push(`${perse} ${perse === 1 ? 'persa' : 'perse'}`)
+  if (daRecuperare > 0) parts.push(`${daRecuperare} da recuperare`)
   parts.push(`${count('da-fare')} da fare`)
   const periodo = `Dal ${formatDateShort(pacchetto.dataInizio)} al ${formatDateShort(pacchetto.scadenza!)}`
   return `${periodo} · ${parts.join(', ')}`

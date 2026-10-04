@@ -10,8 +10,6 @@ export type Cliente = {
   email?: string
   dataNascita?: string // YYYY-MM-DD
   note?: string
-  consensoPrivacy: boolean
-  consensoData?: string // YYYY-MM-DD
   archiviato: boolean
   createdAt: string
 }
@@ -51,6 +49,11 @@ export type Pacchetto = {
   pagato: boolean
   dataPagamento?: string // YYYY-MM-DD
   dataAcquisto: string // YYYY-MM-DD
+  /**
+   * Subscriptions only: Mondays (YYYY-MM-DD) of skipped weeks the owner kept valid.
+   * Their lesson can still be done later, as a second lesson in another week.
+   */
+  recuperi?: string[]
   note?: string
   createdAt: string
 }

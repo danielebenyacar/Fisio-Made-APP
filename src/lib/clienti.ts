@@ -43,12 +43,10 @@ export type ClienteForm = {
   email: string
   dataNascita: string // YYYY-MM-DD from <input type="date">, or ''
   note: string
-  consensoPrivacy: boolean
-  consensoData: string // YYYY-MM-DD, or ''
 }
 
 export type ClienteFormErrors = Partial<
-  Record<'nome' | 'cognome' | 'telefono' | 'email' | 'dataNascita' | 'consensoData', string>
+  Record<'nome' | 'cognome' | 'telefono' | 'email' | 'dataNascita', string>
 >
 
 /** Cliente fields set by the form. Cleared fields are explicitly undefined so an update clears them. */
@@ -61,8 +59,6 @@ export const EMPTY_CLIENTE_FORM: ClienteForm = {
   email: '',
   dataNascita: '',
   note: '',
-  consensoPrivacy: false,
-  consensoData: '',
 }
 
 export function clienteToForm(cliente: Cliente): ClienteForm {
@@ -73,8 +69,6 @@ export function clienteToForm(cliente: Cliente): ClienteForm {
     email: cliente.email ?? '',
     dataNascita: cliente.dataNascita ?? '',
     note: cliente.note ?? '',
-    consensoPrivacy: cliente.consensoPrivacy,
-    consensoData: cliente.consensoData ?? '',
   }
 }
 
@@ -111,12 +105,6 @@ export function validateClienteForm(
     errors.dataNascita = 'Data non valida'
   }
 
-  let consensoData: string | undefined
-  if (form.consensoPrivacy) {
-    consensoData = form.consensoData || toIsoDate(today)
-    if (!isPlausiblePastDate(consensoData, today)) errors.consensoData = 'Data non valida'
-  }
-
   if (Object.keys(errors).length > 0) return { ok: false, errors }
   return {
     ok: true,
@@ -127,8 +115,6 @@ export function validateClienteForm(
       email: email || undefined,
       dataNascita: form.dataNascita || undefined,
       note: note || undefined,
-      consensoPrivacy: form.consensoPrivacy,
-      consensoData,
     },
   }
 }

@@ -21,7 +21,7 @@ import { TONE_STYLE } from '../../components/toneStyles'
 import type { Cliente, ModalitaPacchetto, Pacchetto, TipoPacchetto } from '../../data'
 import { DISCIPLINE } from '../../data'
 import { fullName } from '../../lib/clienti'
-import { formatDateIt, toIsoDate } from '../../lib/dates'
+import { formatDateIt, formatDateShort, toIsoDate } from '../../lib/dates'
 import { descriviTipo, MODALITA_LABEL } from '../../lib/listino'
 import {
   conDataInizio,
@@ -33,7 +33,7 @@ import {
   type PacchettoFormValue,
 } from '../../lib/pacchettoForm'
 import { descriviAvanzamento, etichettaStato } from '../../lib/pacchettoLabel'
-import { haSuccessivo, scadenzaDopoMesi, statoPacchetto } from '../../lib/packages'
+import { aggiornaRecuperi, haSuccessivo, scadenzaDopoMesi, statoPacchetto } from '../../lib/packages'
 import { useCliente } from '../clienti/useClienti'
 import { useDisciplineAutomatiche } from '../clienti/useDisciplineAutomatiche'
 import { SettimaneBar } from './SettimaneBar'
@@ -164,7 +164,7 @@ function ModificaPacchetto({
   pacchettoId: string
   goBack: () => void
 }) {
-  const { pacchetti, lezioni, error } = usePacchetti({ clienteId: cliente.id })
+  const { pacchetti, lezioni, error, reload } = usePacchetti({ clienteId: cliente.id })
   const [today] = useState(() => new Date())
 
   if (error) return <EmptyState>Non riesco a caricare il pacchetto. Riprova tra poco.</EmptyState>
@@ -189,6 +189,7 @@ function ModificaPacchetto({
       rinnovato={haSuccessivo(pacchetto, pacchetti)}
       today={today}
       goBack={goBack}
+      onRecuperiChange={reload}
     />
   )
 }
@@ -201,6 +202,7 @@ function ModificaPacchettoForm({
   rinnovato,
   today,
   goBack,
+  onRecuperiChange,
 }: {
   pacchetto: Pacchetto
   cliente: Cliente
@@ -209,6 +211,7 @@ function ModificaPacchettoForm({
   rinnovato: boolean
   today: Date
   goBack: () => void
+  onRecuperiChange: () => void
 }) {
   const repository = useRepository()
   const { rimuoviSeNonUsata } = useDisciplineAutomatiche()
@@ -220,6 +223,13 @@ function ModificaPacchettoForm({
   async function save(value: PacchettoFormValue) {
     await repository.updatePacchetto(pacchetto.id, value)
     goBack()
+  }
+
+  // Skipped weeks of a subscription still in use: each can be kept valid (or not) with one tap.
+  const saltate = stato.scaduto ? [] : stato.settimane.filter((w) => w.stato !== 'fatta' && w.stato !== 'da-fare')
+  async function setRecupero(inizio: string, valida: boolean) {
+    await repository.updatePacchetto(pacchetto.id, { recuperi: aggiornaRecuperi(pacchetto.recuperi, inizio, valida) })
+    onRecuperiChange()
   }
 
   async function remove() {
@@ -254,6 +264,28 @@ function ModificaPacchettoForm({
           <div className="mt-2">
             <SettimaneBar settimane={stato.settimane} disciplina={pacchetto.disciplina} />
           </div>
+        )}
+        {saltate.length > 0 && (
+          <ul aria-label="Settimane saltate" className="mt-3 divide-y divide-brand-100 border-t border-brand-100">
+            {saltate.map((w) => (
+              <li key={w.inizio} className="flex min-h-12 flex-wrap items-center justify-between gap-x-3">
+                <span>
+                  Settimana del {formatDateShort(w.inizio)}:{' '}
+                  {w.stato === 'persa' ? 'persa' : w.stato === 'da-recuperare' ? 'da recuperare' : 'recuperata'}
+                </span>
+                {w.stato === 'persa' && (
+                  <button type="button" onClick={() => setRecupero(w.inizio, true)} className="min-h-12 font-semibold underline">
+                    Non farla perdere
+                  </button>
+                )}
+                {w.stato === 'da-recuperare' && (
+                  <button type="button" onClick={() => setRecupero(w.inizio, false)} className="min-h-12 font-semibold underline">
+                    Non recuperare
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
 

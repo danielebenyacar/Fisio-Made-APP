@@ -97,7 +97,7 @@ export function ImportaClientiPage() {
             <p className="text-brand-700">
               Nella prima riga del file servono i titoli delle colonne. Obbligatorie:{' '}
               <strong>Nome</strong> e <strong>Cognome</strong>. Se ci sono, vengono lette anche:
-              Telefono, Email, Data di nascita, Discipline, Note, Consenso privacy.
+              Telefono, Email, Data di nascita, Discipline, Note.
             </p>
             <p className="mt-2 text-brand-700">
               Prima di salvare vedrai l’anteprima: non viene aggiunto nulla finché non confermi.
@@ -191,7 +191,6 @@ function Preview({ fileName, analysis, onImport, onChooseAnother }: PreviewProps
                 <DisciplinaPills discipline={cliente.discipline} />
                 <span className="text-brand-600">
                   {cliente.telefono ? formatPhone(cliente.telefono) : 'Senza telefono'}
-                  {!cliente.consensoPrivacy && ' · consenso privacy da far firmare'}
                 </span>
                 {avvisi.map((avviso) => (
                   <span key={avviso} className="flex gap-1.5 text-danger-700">

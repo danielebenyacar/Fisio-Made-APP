@@ -80,6 +80,18 @@ describe('package labels — subscriptions', () => {
     })
   })
 
+  it('counts a skipped week kept valid as to recover, then as done', () => {
+    const kept = { ...abbonamento, recuperi: ['2026-10-12'] } // 3rd week skipped
+    const lezioni = fatte('a1', [new Date(2026, 9, 2, 18), new Date(2026, 9, 6, 18)])
+    expect(label(kept, lezioni, new Date(2026, 9, 21)).avanzamento).toBe(
+      'Dal 1 ott al 31 ott · 2 fatte, 1 da recuperare, 2 da fare',
+    )
+    const twiceThisWeek = fatte('a1', [new Date(2026, 9, 2, 18), new Date(2026, 9, 6, 18), new Date(2026, 9, 20, 18), new Date(2026, 9, 21, 18)])
+    expect(label(kept, twiceThisWeek, new Date(2026, 9, 21)).avanzamento).toBe(
+      'Dal 1 ott al 31 ott · 4 fatte, 1 da fare',
+    )
+  })
+
   it('counts down the last days', () => {
     expect(label(abbonamento, [], new Date(2026, 9, 29)).etichetta).toEqual({ testo: 'Scade tra 2 giorni', tono: 'avviso' })
     expect(label(abbonamento, [], new Date(2026, 9, 30)).etichetta?.testo).toBe('Scade domani')

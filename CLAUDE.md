@@ -85,9 +85,9 @@ Circa 15 clienti finti con nomi italiani plausibili. Devono coprire tutti gli sc
 - compleanno oggi, tra 2 giorni, tra 3 giorni (alert) e tra 5 giorni (NON in alert)
 - cliente con pacchetto nuovo acquistato mentre il vecchio ha ancora residue
 - cliente con un'assenza registrata (verifica che non scali le residue)
+- abbonamento con una settimana saltata resa recuperabile ("Non farla perdere")
 - cliente senza telefono (il pulsante WhatsApp deve essere disabilitato)
 - cliente archiviato
-- cliente senza consenso privacy
 - clienti con una, due e tre discipline (coerenti con gruppi, appuntamenti e pacchetti)
 - clienti "normali" senza alert
 
@@ -104,9 +104,7 @@ type Cliente = {
   telefono?: string          // salvato in formato E.164, es. +393331234567
   email?: string
   dataNascita?: string       // YYYY-MM-DD
-  note?: string
-  consensoPrivacy: boolean
-  consensoData?: string      // YYYY-MM-DD
+  note?: string              // solo cose pratiche, niente dati sulla salute (§11)
   archiviato: boolean
   createdAt: string
 }
@@ -139,6 +137,7 @@ type Pacchetto = {           // pacchetto o abbonamento venduto a un cliente
   pagato: boolean
   dataPagamento?: string
   dataAcquisto: string
+  recuperi?: string[]        // 'abbonamento': lunedì (YYYY-MM-DD) delle settimane saltate rese recuperabili
   note?: string
   createdAt: string
 }
@@ -185,6 +184,7 @@ type Appuntamento = {        // seduta individuale (fisio)
 Regole derivate (funzioni pure in `src/lib/`, con unit test):
 - **Sedute**: `residue = lezioniTotali - numero lezioni con stato 'fatta' del pacchetto`. Se c'è una scadenza, dopo quella data il pacchetto è scaduto.
 - **Abbonamento**: copre le settimane (lunedì–domenica) tra `dataInizio` e `scadenza`; ogni settimana dà diritto a 1 lezione. Settimana con una lezione fatta = "fatta"; settimana passata senza lezione = **"persa"** (si recupera solo nella stessa settimana); le altre = "da fare". `residue` = settimane da fare. Scadenza di default: inizio + N mesi − 1 giorno (1/10 → 31/10).
+- **Settimana saltata recuperabile**: a discrezione della titolare, una settimana persa di un abbonamento ancora valido si rende recuperabile con un tocco ("Non farla perdere", con Annulla). Diventa "da recuperare" e conta nelle residue finché in una settimana **successiva** non c'è una seconda lezione, che la recupera ("recuperata"); se non è recuperata entro la scadenza torna persa. Con un recupero disponibile la seconda lezione della settimana non chiede conferma ("Recupera una settimana saltata"). Regola in `settimaneAbbonamento()`.
 - Una nuova lezione scala dal **pacchetto più vecchio con residue > 0 della stessa disciplina** (FIFO, ordine `dataInizio`).
 - Se il cliente non ha pacchetti con residue per quella disciplina, "Segna lezione" chiede di creare prima un pacchetto (non si va in negativo).
 - **Le assenze NON scalano le sedute.** Si registrano solo per storico (stato `'assente'`), non toccano le residue né il badge `x/y`. Negli abbonamenti un'assenza non recuperata in settimana fa perdere la settimana.
@@ -240,8 +240,10 @@ Link: `https://wa.me/<numero senza +>?text=<testo url-encoded>`. Funzioni in `sr
 - Nuovo appuntamento: cliente, orario, "Valutazione posturale" (già spuntata se il cliente non ha pacchetti fisio), nota a richiesta. Sempre fisio: nessuna scelta di disciplina. Durata 60 minuti, modificabile solo da "Un altro orario".
 - Azioni distruttive (elimina, archivia) sempre con conferma.
 - Lista clienti: ricerca per nome/cognome, tab colorate per disciplina (Tutti · Fisio · Posturale · Yoga; un cliente con più discipline compare in ogni tab), un badge per disciplina con lo stato del pacchetto in uso (`Fisio 8/10` = fatte/totali, `Yoga al 31 ott` = scadenza), giallo se da rinnovare/in scadenza, rosso se esaurito/scaduto, più "Da pagare".
-- Nuovo cliente: Nome, Cognome, Telefono, Data di nascita, "Consenso privacy firmato" (data = oggi, "Cambia data" solo se serve); email e nota a richiesta. **"Fissa il primo appuntamento"** apre la scelta dell'orario con gli impegni già segnati: si salva cliente + appuntamento (valutazione posturale, 1 ora) in un colpo ("Salva cliente e appuntamento"); "Non ora" lo toglie.
-- Scheda cliente: nome, discipline, tre azioni in alto **Appuntamento · Pacchetto · Gruppo**; poi, solo se non vuote, Prossimi appuntamenti, Pacchetti (in uso con avanzamento, pallini delle settimane per gli abbonamenti, "Segna pagato"; storico richiudibile), Gruppo fisso, "Lezioni fatte" (richiuse). In fondo i Dati (solo i campi compilati, più la privacy), "Modifica dati" e "Archivia cliente".
+- Nuovo cliente: Nome, Cognome, Telefono, Data di nascita; email e nota a richiesta. Niente consenso privacy nell'app (§11). **"Fissa il primo appuntamento"** apre la scelta dell'orario con gli impegni già segnati: si salva cliente + appuntamento (valutazione posturale, 1 ora) in un colpo ("Salva cliente e appuntamento"); "Non ora" lo toglie.
+- Scheda cliente: nome, discipline, tre azioni in alto **Appuntamento · Pacchetto · Gruppo**; poi, solo se non vuote, Prossimi appuntamenti, Pacchetti (in uso con avanzamento, pallini delle settimane per gli abbonamenti, "Segna pagato"; storico richiudibile), Gruppo fisso, "Lezioni fatte" (richiuse). In fondo i Dati (solo i campi compilati; se non ce n'è nessuno la sezione non c'è), "Modifica dati" e "Archivia cliente".
+- Abbonamenti: sulla card del pacchetto, per la settimana persa più recente, "Saltata la settimana del … · Non farla perdere"; nella pagina del pacchetto l'elenco delle settimane saltate con "Non farla perdere" / "Non recuperare". Pallini: fatta ✓, persa ✕, da recuperare ↻ (bordo tratteggiato), recuperata ✓.
+- Altro → **Esporta i dati**: "Scarica tutto in Excel" crea un file con i fogli Clienti, Pacchetti, Lezioni, Appuntamenti, Corsi, Prezzi (logica in `src/lib/esporta.ts`). Il foglio Clienti usa gli stessi titoli dell'import, quindi si può reimportare.
 - **Prezzi**: si vedono e si cambiano solo in Altro → Prezzi (il listino, prima voce di Altro). Nella scheda cliente, nei pacchetti del cliente e nella scelta del pacchetto non compaiono prezzi; il pacchetto venduto copia comunque il prezzo dal listino (resta nei dati).
 - Nuovo pacchetto: "Cosa ha comprato?" → voce del listino → solo "Dal", "Già pagato" e nota a richiesta (scadenza calcolata e mostrata come testo; data di acquisto e data di pagamento = oggi, senza campi). "Altro" per un pacchetto fuori listino: disciplina, tipo, numero di sedute o "Fino al"; il nome è automatico ("8 sedute fisio", "Abbonamento yoga"). Modifica: "Dal", "Fino al", sedute, pagato, nota.
 - Discipline: ogni disciplina ha un colore (token `fisio-*`, `posturale-*`, `yoga-*` in `tailwind.config`). Nel form cliente non si scelgono: nella scheda compaiono come etichette in sola lettura, aggiornate da gruppo fisso, appuntamenti e pacchetti.
@@ -279,14 +281,14 @@ netlify.toml
 Si costruisce a moduli per poter mostrare alla titolare l'avanzamento passo per passo. Fai solo il modulo richiesto.
 
 - **M0 — Setup**: progetto Vite/React/TS/Tailwind, lint, Vitest, `netlify.toml`, layout con bottom nav (schermate vuote), livello dati con interfaccia + mock repository + seed, banner DEMO, "Reimposta dati demo".
-- **M1 — Clienti**: lista con ricerca e tab per disciplina, dettaglio cliente, crea/modifica/archivia, campo consenso privacy, discipline colorate, import clienti da Excel (vedi §12).
+- **M1 — Clienti**: lista con ricerca e tab per disciplina, dettaglio cliente, crea/modifica/archivia, discipline colorate, import clienti da Excel (vedi §12).
 - **M2 — Pacchetti e abbonamenti**: listino modificabile (Altro → Prezzi), nuovo pacchetto dal dettaglio cliente partendo dal listino, segna pagato, calcolo residue e settimane, scadenze con avvisi nella scheda, badge nella lista, storico pacchetti.
 - **M3 — Agenda e presenze**: corsi di gruppo settimanali (yoga, posturale) e sedute fisio individuali da 1 ora (la prima è la valutazione); vista agenda; segna presenza/assenza dall'agenda e dal "+"; regola FIFO per disciplina e regola settimanale; toast Annulla; WhatsApp di riepilogo; storico lezioni nel dettaglio cliente.
 - **M4 — Oggi**: alert con priorità e pulsanti d'azione, appuntamenti del giorno, auguri WhatsApp.
-- **M5 — Supabase**: migration SQL (tabelle, vincoli, indici), Row Level Security che consente accesso solo all'utente autenticato, login email+password, supabase repository, cambio di `VITE_DATA_MODE` in produzione. Il SQL va in `supabase/migrations/` e lo sviluppatore lo esegue a mano nel SQL editor.
+- **M5 — Supabase**: migration SQL (tabelle, vincoli, indici), Row Level Security che consente accesso solo all'utente autenticato, login email+password, supabase repository, cambio di `VITE_DATA_MODE` in produzione. Il SQL va in `supabase/migrations/` e lo sviluppatore lo esegue a mano nel SQL editor. **Backup automatico settimanale** dei dati (copia cifrata; dove salvarla è da decidere: Drive della titolare o email). Solo dopo questo modulo si importano i clienti veri.
 - **M6 — Google Calendar**: sincronizzazione **bidirezionale** con un calendario dedicato "Fisio Made" nel Google della titolare (appuntamenti e corsi dall'app → Google; spostamenti e cancellazioni fatti su Google → app). Gli altri impegni del suo Google si leggono solo come "occupato" per evitare sovrapposizioni. Richiede Supabase (Edge Functions per OAuth e sync) e un progetto Google Cloud con OAuth.
-- **M7 — Valutazione posturale**: scheda di valutazione nel dettaglio cliente fisio (anamnesi, osservazione posturale fronte/lato/retro, test, obiettivi, piano, foto facoltative) con export PDF in stile Fisio Made (servono logo e colori del sito).
-- **M8 — Rifinitura**: installazione PWA (icona, nome "Fisio Made"), stati vuoti, GitHub Actions per keep-alive di Supabase (ping ogni 3 giorni) e backup settimanale.
+- ~~M7 — Valutazione posturale~~: **non si fa**. La valutazione (anamnesi, osservazioni, piano) la tiene la titolare per conto suo, fuori dall'app: niente scheda né PDF. Nell'app resta solo il segno "Valutazione" sull'appuntamento.
+- **M8 — Rifinitura**: installazione PWA (icona, nome "Fisio Made"), stati vuoti, GitHub Actions per keep-alive di Supabase (ping ogni 3 giorni). (Il backup si fa nel M5; l'esportazione Excel c'è già.)
 
 Fase 2 (non ora): messaggi di auguri semi-automatici.
 
@@ -296,10 +298,12 @@ Fase 2 (non ora): messaggi di auguri semi-automatici.
 - RLS attiva su tutte le tabelle, nessuna tabella accessibile senza login. Registrazioni pubbliche disabilitate.
 - Nessun analytics o tracker di terze parti.
 - Nessun log in console di dati dei clienti.
+- **Niente dati sanitari nell'app**: niente consenso privacy, anamnesi, diagnosi o valutazioni. Nell'app solo dati anagrafici e organizzativi (nome, telefono, nascita, pacchetti, presenze, appuntamenti); la nota del cliente è per cose pratiche. Le informazioni cliniche la titolare le tiene fuori dall'app.
 
 ## 12. Import clienti da Excel
 
-- Dentro l'app: Altro → "Importa da Excel" (anche dal fondo della lista Clienti). Il file reale resta sul telefono: non passa mai dal repo né da Claude.
-- Formato `.xlsx`, primo foglio. La prima riga contiene i titoli delle colonne; obbligatorie **Nome** e **Cognome**, facoltative Telefono, Email, Data di nascita, Discipline, Note, Consenso privacy (sono riconosciuti anche sinonimi, es. Cellulare, Attività, Nato il).
+- Dentro l'app: Altro → "Importa da Excel" (anche dal fondo della lista Clienti). Il file viene letto sul telefono.
+- Il file reale **non va mai nel repo**, né in seed, test, screenshot o PR. Per un file disordinato lo sviluppatore può mandarlo a Claude in chat (prima togliendo colonne con informazioni sulla salute): Claude lo sistema e restituisce un `.xlsx` pulito, che poi si importa dall'app. I clienti veri si importano solo dopo il M5.
+- Formato `.xlsx`, primo foglio. La prima riga contiene i titoli delle colonne; obbligatorie **Nome** e **Cognome**, facoltative Telefono, Email, Data di nascita, Discipline, Note (sono riconosciuti anche sinonimi, es. Cellulare, Attività, Nato il). Le altre colonne (es. un vecchio "Consenso privacy") si ignorano e sono elencate nell'anteprima.
 - Prima di salvare c'è sempre un'anteprima: clienti da importare (con avvisi sui valori scartati), già presenti (stesso nome e cognome, saltati), righe non importabili.
 - Logica in `src/lib/importClienti.ts` (funzione pura, con test). File di esempio con dati finti: `public/esempio-clienti.xlsx`, scaricabile dalla schermata di import.

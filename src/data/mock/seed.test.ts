@@ -105,6 +105,13 @@ describe.each(DATES)('createSeed(%s)', (now) => {
     expect(settimaneAbbonamento(p, data.lezioni, now).some((w) => w.stato === 'persa')).toBe(true)
   })
 
+  it('has a skipped week kept valid, still to recover', () => {
+    const sara = byName(data, 'Sara')
+    const [p] = pacchettiOf(data, sara)
+    const settimane = settimaneAbbonamento(p, data.lezioni, now)
+    expect(settimane.filter((w) => w.stato === 'da-recuperare')).toHaveLength(1)
+  })
+
   it('has an absence that does not count as a lesson done', () => {
     const valentina = byName(data, 'Valentina')
     expect(lezioniOf(data, valentina).filter((l) => l.stato === 'assente')).toHaveLength(1)
@@ -188,12 +195,6 @@ describe.each(DATES)('createSeed(%s)', (now) => {
 
   it('has groups of yoga and posturale only', () => {
     expect(data.corsi.every((c) => c.disciplina === 'yoga' || c.disciplina === 'posturale')).toBe(true)
-  })
-
-  it('has a client still missing the privacy consent', () => {
-    const missing = data.clienti.filter((c) => !c.consensoPrivacy)
-    expect(missing.map((c) => c.nome)).toEqual(['Paolo'])
-    expect(missing[0].consensoData).toBeUndefined()
   })
 
   it('has a client without phone and an archived client', () => {

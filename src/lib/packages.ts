@@ -29,13 +29,15 @@ export function scadenzaDopoMesi(dataInizio: string, mesi: number): string {
 const lezioniFatte = (pacchetto: Pacchetto, lezioni: Lezione[]) =>
   lezioni.filter((l) => l.pacchettoId === pacchetto.id && l.stato === 'fatta')
 
-export type StatoSettimana = 'fatta' | 'persa' | 'da-fare'
+export type StatoSettimana = 'fatta' | 'persa' | 'da-fare' | 'da-recuperare' | 'recuperata'
 export type Settimana = { inizio: string; stato: StatoSettimana }
 
 /**
  * The weeks (Monday–Sunday) covered by a subscription. Each gives the right to
  * one lesson: 'fatta' if a lesson was done, 'persa' if it went by without one,
  * 'da-fare' if it can still be used.
+ * A skipped week kept valid by the owner (`recuperi`) is 'da-recuperare' until a
+ * later week has a second lesson, then 'recuperata'. Not recovered by the expiry: 'persa'.
  */
 export function settimaneAbbonamento(
   pacchetto: Pacchetto,
@@ -47,29 +49,53 @@ export function settimaneAbbonamento(
   const end = parseIsoDate(pacchetto.scadenza)
   if (end < start) return []
 
-  const done = lezioniFatte(pacchetto, lezioni).map((l) => new Date(l.data))
+  const done = lezioniFatte(pacchetto, lezioni)
+    .map((l) => new Date(l.data))
+    .sort((a, b) => a.getTime() - b.getTime())
   const currentWeek = startOfWeek(today, WEEK)
   const expired = toIsoDate(today) > pacchetto.scadenza
+  const keptValid = new Set(pacchetto.recuperi ?? [])
 
-  return eachWeekOfInterval({ start, end }, WEEK).map((weekStart) => {
+  const weeks = eachWeekOfInterval({ start, end }, WEEK).map((weekStart) => {
     const weekEnd = addDays(weekStart, 7)
-    const stato: StatoSettimana = done.some((d) => d >= weekStart && d < weekEnd)
-      ? 'fatta'
-      : expired || weekStart < currentWeek
-        ? 'persa'
-        : 'da-fare'
-    return { inizio: toIsoDate(weekStart), stato }
+    return { weekStart, weekEnd, lessons: done.filter((d) => d >= weekStart && d < weekEnd) }
   })
+  // Second (third…) lessons of a week: each recovers one earlier skipped week kept valid.
+  const extra = weeks.flatMap((w) => w.lessons.slice(1)).sort((a, b) => a.getTime() - b.getTime())
+  let next = 0
+
+  return weeks.map(({ weekStart, weekEnd, lessons }): Settimana => {
+    const inizio = toIsoDate(weekStart)
+    if (lessons.length > 0) return { inizio, stato: 'fatta' }
+    if (!expired && weekStart >= currentWeek) return { inizio, stato: 'da-fare' }
+    if (!keptValid.has(inizio)) return { inizio, stato: 'persa' }
+    while (next < extra.length && extra[next] < weekEnd) next++ // only later lessons recover it
+    if (next < extra.length) {
+      next++
+      return { inizio, stato: 'recuperata' }
+    }
+    return { inizio, stato: expired ? 'persa' : 'da-recuperare' }
+  })
+}
+
+/** `recuperi` with the week starting on `inizio` kept valid (or no longer). Sorted, no repeats. */
+export function aggiornaRecuperi(recuperi: string[] | undefined, inizio: string, valida: boolean): string[] {
+  const set = new Set(recuperi ?? [])
+  if (valida) set.add(inizio)
+  else set.delete(inizio)
+  return [...set].sort()
 }
 
 /**
  * Lessons still available. The ONLY place where this rule lives:
  * - 'sedute': sessions bought minus lessons done (absences never count);
- * - 'abbonamento': weeks that can still be used.
+ * - 'abbonamento': weeks that can still be used, plus skipped weeks kept valid not yet recovered.
  */
 export function residue(pacchetto: Pacchetto, lezioni: Lezione[], today: Date): number {
   if (pacchetto.modalita === 'abbonamento') {
-    return settimaneAbbonamento(pacchetto, lezioni, today).filter((s) => s.stato === 'da-fare').length
+    return settimaneAbbonamento(pacchetto, lezioni, today).filter(
+      (s) => s.stato === 'da-fare' || s.stato === 'da-recuperare',
+    ).length
   }
   return Math.max(0, (pacchetto.lezioniTotali ?? 0) - lezioniFatte(pacchetto, lezioni).length)
 }
@@ -168,7 +194,8 @@ export function pacchettiInEvidenza(
 }
 
 export type SceltaPacchetto =
-  | { tipo: 'ok'; pacchetto: Pacchetto }
+  /** `recupero`: the week is already used, the lesson recovers a skipped week kept valid. */
+  | { tipo: 'ok'; pacchetto: Pacchetto; recupero?: true }
   /** Only subscriptions whose week is already used: can be recorded anyway, it uses no extra right. */
   | { tipo: 'settimana-gia-usata'; pacchetto: Pacchetto }
   | { tipo: 'nessuno' }
@@ -176,7 +203,7 @@ export type SceltaPacchetto =
 /**
  * Which package a lesson of `disciplina` on `quando` uses (FIFO): the oldest
  * package valid that day with something left — sessions left, or a
- * subscription whose week is still unused.
+ * subscription whose week is still unused or with an earlier skipped week to recover.
  */
 export function pacchettoPerLezione(
   pacchetti: Pacchetto[],
@@ -199,6 +226,10 @@ export function pacchettoPerLezione(
     if (p.modalita === 'sedute') {
       if (done.length < (p.lezioniTotali ?? 0)) return { tipo: 'ok', pacchetto: p }
     } else if (done.some((l) => new Date(l.data) >= weekStart && new Date(l.data) < weekEnd)) {
+      const daRecuperare = settimaneAbbonamento(p, lezioni, quando).some(
+        (s) => s.stato === 'da-recuperare' && s.inizio < toIsoDate(weekStart),
+      )
+      if (daRecuperare) return { tipo: 'ok', pacchetto: p, recupero: true }
       weekUsed ??= p
     } else {
       return { tipo: 'ok', pacchetto: p }

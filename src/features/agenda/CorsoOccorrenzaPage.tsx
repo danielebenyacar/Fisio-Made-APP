@@ -225,6 +225,7 @@ function Occorrenza({ corso, corsi, giorno, clienti, lezioni, pacchetti, onChang
                     Già venuto/a questa settimana:{' '}
                     {format(new Date(altrove.data), 'EEEE d', { locale: it })}
                     {altrove.corsoId ? ` (${corsi.find((c) => c.id === altrove.corsoId)?.nome ?? 'altro gruppo'})` : ''}
+                    {scelta?.tipo === 'ok' && scelta.recupero && ' · può recuperare una settimana saltata'}
                   </p>
                 )}
                 {!altrove && scelta && scelta.tipo !== 'ok' && (

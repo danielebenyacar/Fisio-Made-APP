@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Lezione, Pacchetto } from '../data/types'
 import {
+  aggiornaRecuperi,
   haSuccessivo,
   ordinaPacchetti,
   pacchettoPerLezione,
@@ -123,6 +124,49 @@ describe('settimaneAbbonamento', () => {
   })
 })
 
+describe('skipped weeks kept valid (recuperi)', () => {
+  // Wednesday of the 4th week: weeks 1–3 are past.
+  const today = new Date(2026, 9, 21)
+  const yoga = abbonamento({ recuperi: ['2026-10-05'] }) // week 2 skipped, kept valid
+  const week1 = lezione('a1', new Date(2026, 9, 2, 18))
+  const week3 = lezione('a1', new Date(2026, 9, 13, 18))
+  const week3again = lezione('a1', new Date(2026, 9, 15, 18))
+
+  it('keeps the skipped week to recover: it counts as a lesson left', () => {
+    const stati = settimaneAbbonamento(yoga, [week1, week3], today).map((w) => w.stato)
+    expect(stati).toEqual(['fatta', 'da-recuperare', 'fatta', 'da-fare', 'da-fare'])
+    expect(residue(yoga, [week1, week3], today)).toBe(3)
+    // Without keeping it valid the same week is simply lost.
+    expect(residue(abbonamento(), [week1, week3], today)).toBe(2)
+  })
+
+  it('is recovered by a second lesson in a later week', () => {
+    const stati = settimaneAbbonamento(yoga, [week1, week3, week3again], today).map((w) => w.stato)
+    expect(stati).toEqual(['fatta', 'recuperata', 'fatta', 'da-fare', 'da-fare'])
+    expect(residue(yoga, [week1, week3, week3again], today)).toBe(2)
+  })
+
+  it('is not recovered by an extra lesson done before it', () => {
+    const early = abbonamento({ recuperi: ['2026-10-12'] }) // week 3 skipped
+    const twiceInWeek1 = [week1, lezione('a1', new Date(2026, 9, 3, 18))]
+    expect(settimaneAbbonamento(early, twiceInWeek1, today)[2].stato).toBe('da-recuperare')
+  })
+
+  it('is lost if not recovered by the expiry, and a week with a lesson stays done', () => {
+    const afterEnd = new Date(2026, 10, 2)
+    expect(settimaneAbbonamento(yoga, [week1], afterEnd)[1].stato).toBe('persa')
+    const cameAnyway = [week1, lezione('a1', new Date(2026, 9, 7, 18))]
+    expect(settimaneAbbonamento(yoga, cameAnyway, today)[1].stato).toBe('fatta')
+  })
+
+  it('updates the list of kept weeks', () => {
+    expect(aggiornaRecuperi(undefined, '2026-10-05', true)).toEqual(['2026-10-05'])
+    expect(aggiornaRecuperi(['2026-10-12'], '2026-10-05', true)).toEqual(['2026-10-05', '2026-10-12'])
+    expect(aggiornaRecuperi(['2026-10-05'], '2026-10-05', true)).toEqual(['2026-10-05'])
+    expect(aggiornaRecuperi(['2026-10-05', '2026-10-12'], '2026-10-05', false)).toEqual(['2026-10-12'])
+  })
+})
+
 describe('statoPacchetto', () => {
   it('flags sessions packages to renew at 2 left, and finished at 0', () => {
     expect(statoPacchetto(sedute(), times(7), TODAY)).toMatchObject({ residue: 3, daRinnovare: false, attivo: true })
@@ -231,6 +275,19 @@ describe('pacchettoPerLezione (FIFO)', () => {
     expect(pacchettoPerLezione([yoga], [], 'yoga', TODAY)).toEqual({ tipo: 'ok', pacchetto: yoga })
     expect(pacchettoPerLezione([yoga], thisWeek, 'yoga', TODAY)).toEqual({ tipo: 'settimana-gia-usata', pacchetto: yoga })
     expect(pacchettoPerLezione([yoga], thisWeek, 'yoga', new Date(2026, 9, 6))).toEqual({ tipo: 'ok', pacchetto: yoga })
+  })
+
+  it('allows a second lesson in a week to recover a skipped week kept valid', () => {
+    const yoga = abbonamento({ recuperi: ['2026-10-05'] })
+    const lezioni = [lezione('a1', new Date(2026, 9, 2, 18)), lezione('a1', new Date(2026, 9, 13, 18))]
+    const thursdayWeek3 = new Date(2026, 9, 15, 18)
+    expect(pacchettoPerLezione([yoga], lezioni, 'yoga', thursdayWeek3)).toEqual({ tipo: 'ok', pacchetto: yoga, recupero: true })
+    // Once recovered, the week is just used.
+    const recovered = [...lezioni, lezione('a1', thursdayWeek3)]
+    expect(pacchettoPerLezione([yoga], recovered, 'yoga', new Date(2026, 9, 16, 18))).toEqual({
+      tipo: 'settimana-gia-usata',
+      pacchetto: yoga,
+    })
   })
 
   it('moves to the next subscription when the week of the older one is used', () => {

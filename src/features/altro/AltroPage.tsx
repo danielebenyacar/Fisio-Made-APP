@@ -6,6 +6,7 @@ import { ConfirmSheet } from '../../components/ConfirmSheet'
 import { UploadIcon } from '../../components/icons'
 import { PageTitle } from '../../components/PageTitle'
 import type { DataSource } from '../../data'
+import { EsportaCard } from './EsportaCard'
 
 type MockSource = Extract<DataSource, { mode: 'mock' }>
 
@@ -115,6 +116,7 @@ export function AltroPage() {
             </ButtonLink>
           </div>
         </section>
+        <EsportaCard />
         {source.mode === 'mock' && <DemoDataCard source={source} />}
       </div>
     </>

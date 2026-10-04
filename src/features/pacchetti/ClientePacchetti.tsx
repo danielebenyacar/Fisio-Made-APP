@@ -1,8 +1,16 @@
 import { useState } from 'react'
 import { useRepository } from '../../app/dataSource'
+import { useToast } from '../../app/toastContext'
 import { EmptyState } from '../../components/EmptyState'
-import { toIsoDate } from '../../lib/dates'
-import { haSuccessivo, ordinaPacchetti, pacchettiInEvidenza, statoPacchetto } from '../../lib/packages'
+import type { Pacchetto } from '../../data'
+import { formatDateShort, toIsoDate } from '../../lib/dates'
+import {
+  aggiornaRecuperi,
+  haSuccessivo,
+  ordinaPacchetti,
+  pacchettiInEvidenza,
+  statoPacchetto,
+} from '../../lib/packages'
 import { PacchettoCard } from './PacchettoCard'
 import { usePacchetti } from './usePacchetti'
 
@@ -10,11 +18,27 @@ import { usePacchetti } from './usePacchetti'
 export function ClientePacchetti({ clienteId, today }: { clienteId: string; today: Date }) {
   const repository = useRepository()
   const { pacchetti, lezioni, error, reload } = usePacchetti({ clienteId })
+  const showToast = useToast()
   const [showHistory, setShowHistory] = useState(false)
 
   async function segnaPagato(id: string) {
     await repository.updatePacchetto(id, { pagato: true, dataPagamento: toIsoDate(today) })
     reload()
+  }
+
+  async function recupera(pacchetto: Pacchetto, inizio: string) {
+    await repository.updatePacchetto(pacchetto.id, { recuperi: aggiornaRecuperi(pacchetto.recuperi, inizio, true) })
+    reload()
+    showToast({
+      message: `Settimana del ${formatDateShort(inizio)} non persa: la lezione si può recuperare`,
+      action: {
+        label: 'Annulla',
+        onClick: async () => {
+          await repository.updatePacchetto(pacchetto.id, { recuperi: aggiornaRecuperi(pacchetto.recuperi, inizio, false) })
+          reload()
+        },
+      },
+    })
   }
 
   if (error) return <EmptyState>Non riesco a caricare i pacchetti. Riprova tra poco.</EmptyState>
@@ -46,6 +70,7 @@ export function ClientePacchetti({ clienteId, today }: { clienteId: string; toda
               rinnovato={rinnovato}
               to={`/clienti/${clienteId}/pacchetti/${pacchetto.id}`}
               onSegnaPagato={() => segnaPagato(pacchetto.id)}
+              onRecupera={(inizio) => recupera(pacchetto, inizio)}
             />
           ))}
         </div>

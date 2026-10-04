@@ -18,7 +18,6 @@ const cliente = (overrides: Partial<Cliente>): Cliente => ({
   nome: 'Mario',
   cognome: 'Rossi',
   discipline: [],
-  consensoPrivacy: true,
   archiviato: false,
   createdAt: '2026-01-01T10:00:00.000Z',
   ...overrides,
@@ -96,8 +95,6 @@ describe('validateClienteForm', () => {
         email: 'maria@example.com',
         dataNascita: undefined,
         note: undefined,
-        consensoPrivacy: false,
-        consensoData: undefined,
       },
     })
   })
@@ -115,23 +112,13 @@ describe('validateClienteForm', () => {
     expect(validateClienteForm(form({ dataNascita: '2026-10-01' }), TODAY).ok).toBe(true)
   })
 
-  it('dates the privacy consent today unless a date is given', () => {
-    const today = validateClienteForm(form({ consensoPrivacy: true }), TODAY)
-    expect(today.ok && today.value.consensoData).toBe('2026-10-01')
-    const given = validateClienteForm(form({ consensoPrivacy: true, consensoData: '2025-03-01' }), TODAY)
-    expect(given.ok && given.value.consensoData).toBe('2025-03-01')
-    const none = validateClienteForm(form({ consensoPrivacy: false, consensoData: '2025-03-01' }), TODAY)
-    expect(none.ok && none.value.consensoData).toBeUndefined()
-  })
-
   it('round-trips an existing client through the form', () => {
     const existing = cliente({
       telefono: '+393331234567',
       email: 'mario@example.com',
       dataNascita: '1980-05-20',
       discipline: ['posturale'],
-      consensoData: '2026-01-01',
-      note: 'Spalla destra',
+      note: 'Preferisce la mattina',
     })
     const result = validateClienteForm(clienteToForm(existing), TODAY)
     expect(result.ok && result.value).toEqual({
@@ -140,9 +127,7 @@ describe('validateClienteForm', () => {
       telefono: '+393331234567',
       email: 'mario@example.com',
       dataNascita: '1980-05-20',
-      note: 'Spalla destra',
-      consensoPrivacy: true,
-      consensoData: '2026-01-01',
+      note: 'Preferisce la mattina',
     })
   })
 })

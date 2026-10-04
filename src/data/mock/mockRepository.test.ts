@@ -42,7 +42,6 @@ describe('MockRepository', () => {
       nome: 'Nuova',
       cognome: 'Cliente',
       discipline: ['fisio', 'yoga'],
-      consensoPrivacy: true,
     })
     expect(created).toMatchObject({ id: 'new-1', archiviato: false, createdAt: NOW.toISOString() })
     expect(await make().getCliente('new-1')).toEqual(created)
@@ -87,7 +86,7 @@ describe('MockRepository', () => {
     ...overrides,
   })
   const newCliente = (repo: MockRepository) =>
-    repo.createCliente({ nome: 'A', cognome: 'B', discipline: [], consensoPrivacy: true })
+    repo.createCliente({ nome: 'A', cognome: 'B', discipline: [] })
 
   it('creates and updates packages, oldest first (FIFO order)', async () => {
     const repo = make()
@@ -214,7 +213,7 @@ describe('MockRepository', () => {
   it('reset() discards changes and restores the demo data', async () => {
     const repo = make()
     const before = await repo.listClienti()
-    await repo.createCliente({ nome: 'Temporanea', cognome: 'Zeta', discipline: ['yoga'], consensoPrivacy: false })
+    await repo.createCliente({ nome: 'Temporanea', cognome: 'Zeta', discipline: ['yoga'] })
     await repo.updateCliente(before[0].id, { nome: 'Cambiato' })
 
     await repo.reset()

@@ -16,7 +16,6 @@ type Field =
   | 'dataNascita'
   | 'discipline'
   | 'note'
-  | 'consenso'
 
 /** Column titles recognized for each field, compared without case, accents, spaces or symbols. */
 const HEADERS: Record<Field, string[]> = {
@@ -27,7 +26,6 @@ const HEADERS: Record<Field, string[]> = {
   dataNascita: ['datadinascita', 'datanascita', 'nascita', 'natoil', 'natail', 'compleanno', 'birthday'],
   discipline: ['discipline', 'disciplina', 'attivita', 'corso', 'corsi', 'servizio', 'servizi', 'percorso'],
   note: ['note', 'nota', 'annotazioni', 'commenti', 'osservazioni'],
-  consenso: ['consensoprivacy', 'consenso', 'privacy', 'gdpr', 'liberatoria'],
 }
 
 export const FIELD_LABEL: Record<Field, string> = {
@@ -38,10 +36,7 @@ export const FIELD_LABEL: Record<Field, string> = {
   dataNascita: 'Data di nascita',
   discipline: 'Discipline',
   note: 'Note',
-  consenso: 'Consenso privacy',
 }
-
-const YES = new Set(['si', 's', 'x', 'yes', 'y', 'ok', '1', 'true', 'vero', 'firmato', 'firmata'])
 
 export type ImportRow = { riga: number; cliente: NewCliente; avvisi: string[] }
 
@@ -75,14 +70,6 @@ function parseDateCell(cell: Cell): string | null {
     return utcIsoDate(new Date(Date.UTC(1899, 11, 30) + Math.round(cell) * 86_400_000))
   }
   return typeof cell === 'string' ? parseDateText(cell) : null
-}
-
-function parseConsenso(cell: Cell): { consensoPrivacy: boolean; consensoData?: string } {
-  if (typeof cell === 'boolean') return { consensoPrivacy: cell }
-  if (typeof cell === 'number' && cell === 1) return { consensoPrivacy: true }
-  const date = parseDateCell(cell)
-  if (date) return { consensoPrivacy: true, consensoData: date }
-  return { consensoPrivacy: YES.has(normalizeText(cellText(cell))) }
 }
 
 function mapColumns(header: Cell[]): Map<Field, number> {
@@ -155,7 +142,6 @@ export function analyzeImport(rows: Cell[][], existing: Cliente[], today: Date):
       nome,
       cognome,
       discipline: parseDiscipline(text('discipline')),
-      ...parseConsenso(get('consenso')),
     }
 
     if (text('telefono')) {
